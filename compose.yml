@@ -1,7 +1,7 @@
 services:
-  local-psynapse:
+  local-synapse:
     image: ghcr.io/metalpoch/local-synapse:latest
-    container_name: go-local-psynapse-proxy
+    container_name: go-local-synapse-proxy
     restart: always
     ports:
       - "8080:8080"
