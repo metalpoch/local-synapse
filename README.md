@@ -23,6 +23,28 @@ Hoy en día, Local Synapse actúa como un proxy robusto para la API de Chat de O
    ```bash
    go run main.go
    ```
+### Ejemplo con cURL
+Para ver el streaming en tiempo real desde la terminal:
+```bash
+curl -N "http://localhost:8080/chat?prompt=Explícame+Go+en+una+frase"
+```
+*(El flag `-N` es importante para desactivar el buffering de cURL).*
+
+### Ejemplo con JavaScript (Frontend)
+Si quieres consumirlo desde una web:
+```javascript
+const eventSource = new EventSource('http://localhost:8080/chat?prompt=Hola');
+
+eventSource.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    console.log(data.message.content); // Aquí llega el fragmento de texto
+};
+
+eventSource.onerror = () => {
+    eventSource.close();
+};
+```
+
 ### Ejecución con Podman/Docker
 El proyecto se construye automáticamente en cada cambio a `main`. Puedes obtener la imagen desde GitHub Packages:
 ```bash

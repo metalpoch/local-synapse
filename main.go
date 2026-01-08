@@ -26,6 +26,13 @@ type OllamaChatRequest struct {
 	Stream   bool          `json:"stream"`
 }
 
+type OllamaChatResponse struct {
+	Message struct {
+		Content string `json:"content"`
+	} `json:"message"`
+	Done bool `json:"done"`
+}
+
 func getOllamaURL() string {
 	url := os.Getenv("OLLAMA_URL")
 	if url == "" {
@@ -41,6 +48,9 @@ func streamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	format := r.URL.Query().Get("format")
+	isPlain := format == "plain"
+
 	systemPrompt := os.Getenv("SYSTEM_PROMPT")
 	messages := []ChatMessage{
 		{Role: "system", Content: systemPrompt},
@@ -53,7 +63,11 @@ func streamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream")
+	if isPlain {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	} else {
+		w.Header().Set("Content-Type", "text/event-stream")
+	}
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
@@ -94,9 +108,17 @@ func streamHandler(w http.ResponseWriter, r *http.Request) {
 	scanner.Buffer(buf, 1024*1024)
 
 	for scanner.Scan() {
-		if _, err := fmt.Fprintf(w, "data: %s\n\n", scanner.Text()); err != nil {
-			log.Printf("Error writing to client: %v", err)
-			return
+		line := scanner.Text()
+		if isPlain {
+			var res OllamaChatResponse
+			if err := json.Unmarshal([]byte(line), &res); err == nil {
+				fmt.Fprint(w, res.Message.Content)
+			}
+		} else {
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", line); err != nil {
+				log.Printf("Error writing to client: %v", err)
+				return
+			}
 		}
 		flusher.Flush()
 	}
@@ -105,6 +127,7 @@ func streamHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error reading Ollama response: %v", err)
 	}
 }
+
 
 func main() {
 	port := os.Getenv("PORT")
