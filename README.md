@@ -23,10 +23,16 @@ Hoy en día, Local Synapse actúa como un proxy robusto para la API de Chat de O
    ```bash
    go run main.go
    ```
-3. Realiza una petición de prueba:
-   ```bash
-   curl "http://localhost:8080/chat?prompt=Hola"
-   ```
+### Ejecución con Podman/Docker
+El proyecto se construye automáticamente en cada cambio a `main`. Puedes obtener la imagen desde GitHub Packages:
+```bash
+podman pull ghcr.io/${{ github.repository }}:latest
+```
+
+O ejecutarlo directamente con Compose:
+```bash
+podman-compose up -d
+```
 
 ## 🔮 Visión a Futuro
 
