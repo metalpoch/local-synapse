@@ -1,0 +1,12 @@
+services:
+  local-psynapse:
+    build: .
+    container_name: go-local-psynapse-proxy
+    ports:
+      - "8080:8080"
+    environment:
+      - OLLAMA_URL=http://host.containers.internal:11434
+      - PORT=8080
+      - SYSTEM_PROMPT=Eres un asistente especializado en programación Go. Proporciona respuestas concisas, técnicas y prácticas sobre desarrollo en Go. Si el usuario pregunta sobre otros lenguajes, sugiere enfoques similares en Go cuando sea posible.
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
