@@ -70,6 +70,8 @@ func streamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Accel-Buffering", "no")
 
 	body, err := json.Marshal(OllamaChatRequest{
 		Model:    MODEL,
