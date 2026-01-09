@@ -16,7 +16,9 @@ go.work
 go.work.sum
 # Root binary from previous versions
 main_root
-main_api
+# Root binaries
+api
+mcp
 synapse
 
 # Astro / Node
