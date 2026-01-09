@@ -1,24 +1,40 @@
 # Local Synapse 🧠
 
-**Local Synapse** es un proxy ligero escrito en Go diseñado para conectar un servidor local de [Ollama](https://ollama.com/) con el mundo exterior. 
+**Local Synapse** es un proxy ligero y servidor de herramientas escrito en Go. Su propósito es conectar un servidor local de [Ollama](https://ollama.com/) con el mundo exterior y exponer métricas del sistema a través del [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
 
-Actualmente, el proyecto se encuentra en una fase pre-MVP, sirviendo como una herramienta de validación para asegurar que el servidor local es accesible de forma segura y eficiente desde redes externas.
+Este proyecto está diseñado para desarrolladores que desean exponer sus modelos locales y el estado de su servidor de manera segura y estandarizada.
 
-## 🚀 Estado Actual
+---
 
-Actualmente, el proyecto ofrece:
-- **Proxy Ollama**: Streaming de alta fidelidad, soporte para respuestas en plano (`format=plain`) o SSE.
-- **Métricas del Sistema**: Endpoint para monitorear CPU, RAM, Disco y Red.
-- **Servidor MCP (Model Context Protocol)**: Servidor basado en Stdio para exponer herramientas locales a LLMs.
+## 🚀 Características Principales
 
-## 🛠 Instalación y Uso
+### 1. Proxy para Ollama
+- **Streaming de alta fidelidad**: Soporte completo para respuestas en tiempo real.
+- **Formatos flexibles**: Soporte nativo de Ollama o texto plano (`format=plain`).
+- **Seguridad**: Capa intermedia para gestionar accesos (futuro).
+
+### 2. Monitor de Sistema
+- Endpoint REST para métricas en tiempo real: `GET /api/v1/system/stats`.
+- Monitoreo de: CPU, RAM, Disco y Red.
+
+### 3. Servidor MCP (Model Context Protocol) 
+- Expone herramientas locales a LLMs (Modelos de Lenguaje).
+- **Herramienta actual**: `system-stats` (Consultar estado del servidor desde el LLM).
+- **Transporte**: Stdio (Entrada/Salida estándar).
+
+---
+
+## 🛠 Flujo de Trabajo (Desarrollo)
+
+Sigue estos pasos para configurar tu entorno de desarrollo local.
 
 ### Prerrequisitos
-- **Go 1.25+**
-- **Ollama** corriendo localmente (opcional si solo usas métricas).
+- **Go 1.25+** instalado.
+- **Ollama** corriendo localmente (por defecto en port 11434).
+- **Make** (opcional, para usar el Makefile).
 
-### Configuración
-Crea un archivo `.env` basado en la configuración necesaria:
+### 1. Configuración del Entorno
+Crea un archivo `.env` en la raíz del proyecto:
 ```env
 PORT=8080
 OLLAMA_URL=http://localhost:11434
@@ -26,49 +42,78 @@ OLLAMA_MODEL=llama3
 OLLAMA_SYSTEM_PROMPT="Eres un asistente útil."
 ```
 
-### Ejecución
-
-#### 1. API Principal
-Ejecuta el servidor API que incluye el proxy de Ollama y las métricas:
+### 2. Ejecutar la API (Proxy + Métricas)
+La API maneja el proxy hacia Ollama y el endpoint de métricas.
 ```bash
+# Usando Make
 make run-api
-```
-Endpoint de métricas: `GET /api/v1/system/stats`
 
-#### 2. Servidor MCP (Stdio)
-Si deseas usar las herramientas locales con un host MCP (como `mcphost` o Claude Desktop):
+# O comando directo
+go run ./cmd/api/main.go
+```
+La API estará disponible en `http://localhost:8080`.
+
+### 3. Ejecutar el Servidor MCP
+El servidor MCP funciona via Stdio, por lo que se ejecuta generalmente a través de un host MCP o para pruebas manuales.
+
+**Prueba manual (JSON-RPC):**
 ```bash
-go run ./cmd/mcp/main.go
+echo '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}' | go run ./cmd/mcp/main.go
 ```
 
-## 🔗 Configuración de `mcphost` (Remoto)
+---
 
-Para que un LLM en un servidor remoto o local pueda interactuar con las herramientas de este proyecto, se recomienda usar [mcphost](https://github.com/mark3labs/mcphost).
+## 📦 Despliegue (Producción)
 
-### Pasos en el servidor remoto:
+### 1. Construcción de Binarios
+Para desplegar en un servidor, primero compila los binarios necesarios.
 
-1. **Instalar mcphost**:
-   ```bash
-   go install github.com/mark3labs/mcphost@latest
-   ```
+```bash
+# Compilar API
+go build -o synapse ./cmd/api/main.go
 
-2. **Configurar el puente**:
-   Debes configurar `mcphost` para que use Ollama como proveedor y se conecte a este proyecto como un servidor de herramientas.
+# Compilar MCP
+go build -o mcp ./cmd/mcp/main.go
+```
 
-   Ejemplo de configuración para `mcphost`:
-   ```bash
-   mcphost config set provider ollama
-   mcphost config set ollama-model llama3:latest
-   mcphost config set ollama-url http://tu-ip-u-host:11434
-   ```
+Resultados:
+- `synapse`: Ejecutable del servidor web/proxy.
+- `mcp`: Ejecutable del servidor MCP.
 
-3. **Registrar Local Synapse como servidor MCP**:
-   Ya que el servidor MCP usa Stdio, si `mcphost` corre en una máquina distinta, podrías necesitar un túnel (como SSH) o ejecutarlo localmente donde reside el proyecto.
+### 2. Despliegue con Podman Compose (Producción)
 
-   Si `mcphost` tiene acceso al binario compilado de `mcp`:
-   ```bash
-   mcphost server add local-synapse -- ./mcp
-   ```
+El proyecto está diseñado para desplegarse fácilmente usando `podman-compose`. Esto levantará el contenedor con la API y el servidor MCP listos.
+
+```bash
+# Iniciar todo el stack
+podman-compose up -d
+```
+
+Esto descargará la última imagen (o la construirá si así se configura) y expondrá el puerto 8080.
+
+### 3. Integración MCP Remota (mcphost)
+Para que un LLM interactúe con las herramientas del contenedor, configuramos `mcphost` en el servidor (host).
+
+**Paso único de configuración:**
+
+1.  **Instalar mcphost** (si no lo tienes):
+    ```bash
+    go install github.com/mark3labs/mcphost@latest
+    ```
+
+2.  **Conectar mcphost al contenedor**:
+    Usamos `podman exec` para que `mcphost` pueda "hablar" con el binario `mcp` que vive **dentro** del contenedor que acabamos de levantar.
+    
+    ```bash
+    # 'go-local-synapse-proxy' es el nombre del contenedor (ver compose.yml)
+    mcphost server add local-synapse -- podman exec -i go-local-synapse-proxy /root/mcp
+    ```
+
+3.  **¡Listo!**
+    Ahora `mcphost` gestiona la comunicación. No necesitas ejecutar nada más manualmente. Si reinicias el servidor o el contenedor (`podman-compose down/up`), la configuración de `mcphost` persiste y seguirá funcionando automáticamente.
+
+4.  **Uso**:
+    Ahora `mcphost` se comunicará con el proceso `mcp` que vive dentro del contenedor. ¡Sencillo y limpio!
 
 ---
 *Desarrollado con ❤️ por poch.*
