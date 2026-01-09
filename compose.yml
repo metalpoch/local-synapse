@@ -1,9 +1,6 @@
 services:
   local-synapse:
     image: ghcr.io/metalpoch/local-synapse:latest
-    build:
-      context: .
-      dockerfile: Containerfile
     container_name: go-local-synapse-proxy
     restart: always
     ports:
