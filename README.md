@@ -19,21 +19,21 @@ Hoy en día, Local Synapse actúa como un proxy robusto para la API de Chat de O
 
 ### Ejecución
 1. Clona el repositorio.
-2. Ejecuta el servidor:
+2. Ejecuta el servidor usando el Makefile:
    ```bash
-   go run main.go
+   make run-api
    ```
 ### Ejemplo con cURL
 Para ver el streaming en tiempo real desde la terminal:
 ```bash
-curl -N "http://localhost:8080/chat?prompt=Explícame+Go+en+una+frase"
+curl -N "http://localhost:8080/api/v1/ollama/chat?prompt=Explícame+Go+en+una+frase"
 ```
 *(El flag `-N` es importante para desactivar el buffering de cURL).*
 
 ### Ejemplo con JavaScript (Frontend)
 Si quieres consumirlo desde una web:
 ```javascript
-const eventSource = new EventSource('http://localhost:8080/chat?prompt=Hola');
+const eventSource = new EventSource('http://localhost:8080/api/v1/ollama/chat?prompt=Hola');
 
 eventSource.onmessage = (event) => {
     const data = JSON.parse(event.data);
