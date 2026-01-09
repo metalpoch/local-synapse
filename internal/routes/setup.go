@@ -15,5 +15,6 @@ type Config struct {
 }
 
 func Init(cfg *Config) {
+	NewSystemRoutes(cfg.Echo)
 	NewOllamaRoutes(cfg.Echo, cfg.OllamaUrl, cfg.OllamaModel, cfg.OllamaSystemPrompt)
 }

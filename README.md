@@ -6,65 +6,69 @@ Actualmente, el proyecto se encuentra en una fase pre-MVP, sirviendo como una he
 
 ## 🚀 Estado Actual
 
-Hoy en día, Local Synapse actúa como un proxy robusto para la API de Chat de Ollama, ofreciendo:
-- **Streaming de alta fidelidad**: Soporte para respuestas largas mediante un búfer optimizado de 1MB.
-- **Eficiencia de recursos**: Cancelación automática de peticiones a Ollama si el cliente se desconecta.
-- **Configuración simple**: Configurable mediante variables de entorno (`PORT`, `OLLAMA_URL`, `SYSTEM_PROMPT`).
+Actualmente, el proyecto ofrece:
+- **Proxy Ollama**: Streaming de alta fidelidad, soporte para respuestas en plano (`format=plain`) o SSE.
+- **Métricas del Sistema**: Endpoint para monitorear CPU, RAM, Disco y Red.
+- **Servidor MCP (Model Context Protocol)**: Servidor basado en Stdio para exponer herramientas locales a LLMs.
 
 ## 🛠 Instalación y Uso
 
 ### Prerrequisitos
-- Go 1.25+
-- Ollama corriendo localmente.
+- **Go 1.25+**
+- **Ollama** corriendo localmente (opcional si solo usas métricas).
+
+### Configuración
+Crea un archivo `.env` basado en la configuración necesaria:
+```env
+PORT=8080
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=llama3
+OLLAMA_SYSTEM_PROMPT="Eres un asistente útil."
+```
 
 ### Ejecución
-1. Clona el repositorio.
-2. Ejecuta el servidor usando el Makefile:
+
+#### 1. API Principal
+Ejecuta el servidor API que incluye el proxy de Ollama y las métricas:
+```bash
+make run-api
+```
+Endpoint de métricas: `GET /api/v1/system/stats`
+
+#### 2. Servidor MCP (Stdio)
+Si deseas usar las herramientas locales con un host MCP (como `mcphost` o Claude Desktop):
+```bash
+go run ./cmd/mcp/main.go
+```
+
+## 🔗 Configuración de `mcphost` (Remoto)
+
+Para que un LLM en un servidor remoto o local pueda interactuar con las herramientas de este proyecto, se recomienda usar [mcphost](https://github.com/mark3labs/mcphost).
+
+### Pasos en el servidor remoto:
+
+1. **Instalar mcphost**:
    ```bash
-   make run-api
+   go install github.com/mark3labs/mcphost@latest
    ```
-### Ejemplo con cURL
-Para ver el streaming en tiempo real desde la terminal:
-```bash
-curl -N "http://localhost:8080/api/v1/ollama/chat?prompt=Explícame+Go+en+una+frase"
-```
-*(El flag `-N` es importante para desactivar el buffering de cURL).*
 
-### Ejemplo con JavaScript (Frontend)
-Si quieres consumirlo desde una web:
-```javascript
-const eventSource = new EventSource('http://localhost:8080/api/v1/ollama/chat?prompt=Hola');
+2. **Configurar el puente**:
+   Debes configurar `mcphost` para que use Ollama como proveedor y se conecte a este proyecto como un servidor de herramientas.
 
-eventSource.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    console.log(data.message.content); // Aquí llega el fragmento de texto
-};
+   Ejemplo de configuración para `mcphost`:
+   ```bash
+   mcphost config set provider ollama
+   mcphost config set ollama-model llama3:latest
+   mcphost config set ollama-url http://tu-ip-u-host:11434
+   ```
 
-eventSource.onerror = () => {
-    eventSource.close();
-};
-```
+3. **Registrar Local Synapse como servidor MCP**:
+   Ya que el servidor MCP usa Stdio, si `mcphost` corre en una máquina distinta, podrías necesitar un túnel (como SSH) o ejecutarlo localmente donde reside el proyecto.
 
-### Ejecución con Podman/Docker
-El proyecto se construye automáticamente en cada cambio a `main`. Puedes obtener la imagen desde GitHub Packages:
-```bash
-podman pull ghcr.io/${{ github.repository }}:latest
-```
-
-O ejecutarlo directamente con Compose:
-```bash
-podman-compose up -d
-```
-
-## 🔮 Visión a Futuro
-
-Este proyecto no se detendrá en ser un simple proxy. El objetivo es evolucionar hacia una plataforma integrada que permita:
-
-1.  **Gestión de Proyectos Electrónicos**: Una interfaz para visualizar datos de sensores, controlar actuadores y organizar esquemáticos/documentación técnica de mis proyectos.
-2.  **Asistente LLM Genérico**: Un compañero de IA personalizado que no solo responda preguntas, sino que entienda el contexto de mis desarrollos locales.
-4.  **Integración con MCP (Model Context Protocol)**: Actuar como un host o cliente MCP para permitir que el LLM interactúe dinámicamente con herramientas externas y bases de conocimiento.
-5.  **Frontend Interactivo**: Un panel de control moderno para visualizar el estado de los proyectos electrónicos y chatear con los modelos de forma fluida.
-6.  **Puente Hardware-IA**: Utilizar la potencia de los LLMs locales para analizar telemetría de hardware en tiempo real.
+   Si `mcphost` tiene acceso al binario compilado de `mcp`:
+   ```bash
+   mcphost server add local-synapse -- ./mcp
+   ```
 
 ---
 *Desarrollado con ❤️ por poch.*
