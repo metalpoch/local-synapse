@@ -1,13 +1,31 @@
 services:
+  valkey:
+    image: valkey/valkey:latest
+    container_name: valkey-cache
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "valkey-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   local-synapse:
     image: ghcr.io/metalpoch/local-synapse:latest
     container_name: go-local-synapse-proxy
     restart: always
     ports:
       - "8080:8080"
+    depends_on:
+      valkey:
+        condition: service_healthy
     environment:
       - OLLAMA_URL=http://host.containers.internal:11434
+      - OLLAMA_MODEL=qwen3:8b
+      - VALKEY_ADDRESS=valkey:6379
       - PORT=8080
-      - SYSTEM_PROMPT=Eres un asistente especializado en programación Go. Proporciona respuestas concisas, técnicas y prácticas sobre desarrollo en Go. Si el usuario pregunta sobre otros lenguajes, sugiere enfoques similares en Go cuando sea posible.
+      - JWT_SECRET=your_secret_key_here
+      - OLLAMA_SYSTEM_PROMPT=Eres un asistente especializado en programación Go. Proporciona respuestas concisas, técnicas y prácticas sobre desarrollo en Go. Si el usuario pregunta sobre otros lenguajes, sugiere enfoques similares en Go cuando sea posible.
     extra_hosts:
       - "host.containers.internal:host-gateway"
