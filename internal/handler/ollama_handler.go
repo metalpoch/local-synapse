@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -54,6 +55,7 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 	if hdlr.mcpClient != nil {
 		mcpTools, err := hdlr.mcpClient.ListTools(ctx)
 		if err == nil && len(mcpTools) > 0 {
+			log.Printf("[MCP] Discovered %d tools", len(mcpTools))
 			for _, t := range mcpTools {
 				tools = append(tools, dto.Tool{
 					Type: "function",
@@ -64,6 +66,8 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 					},
 				})
 			}
+		} else if err != nil {
+			log.Printf("[MCP] Error listing tools: %v", err)
 		}
 	}
 
@@ -81,13 +85,16 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 		Tools:    tools,
 	}
 
+	log.Printf("[MCP] Sending initial request to Ollama (Tool detection mode)")
 	resp1, err := hdlr.callOllama(ctx, req1)
 	if err != nil {
+		log.Printf("[MCP] Initial Ollama call failed: %v", err)
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "Failed to connect to Ollama")
 	}
 
 	// 4. Check for Tool Calls
 	if len(resp1.Message.ToolCalls) > 0 {
+		log.Printf("[MCP] Ollama requested %d tools", len(resp1.Message.ToolCalls))
 		// Append assistant's "call" message
 		messages = append(messages, dto.OllamaChatMessage{
 			Role:      resp1.Message.Role, // usually "assistant"
@@ -97,13 +104,15 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 
 		// Execute tools
 		for _, tc := range resp1.Message.ToolCalls {
-			// Notify user we are executing a tool? For now, silence (or maybe send a comment in plain text/SSE event)
+			log.Printf("[MCP] Executing tool: %s", tc.Function.Name)
 			
 			result, err := hdlr.mcpClient.CallTool(ctx, tc.Function.Name, tc.Function.Arguments)
 			content := ""
 			if err != nil {
+				log.Printf("[MCP] Tool execution failed: %v", err)
 				content = fmt.Sprintf("Error executing tool: %v", err)
 			} else {
+				log.Printf("[MCP] Tool execution successful")
 				// Convert result to string (Text or JSON)
 				if len(result.Content) > 0 {
 					for _, c := range result.Content {
@@ -125,6 +134,7 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 		}
 
 		// 5. Final Request (Streaming)
+		log.Printf("[MCP] Sending final request with tool results")
 		req2 := dto.OllamaChatRequest{
 			Model:    hdlr.Model,
 			Messages: messages,
@@ -133,6 +143,8 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 		}
 		
 		return hdlr.streamOllama(ctx, req2, res, isPlain)
+	} else {
+		log.Printf("[MCP] No tool calls requested by Ollama")
 	}
 
 	// 5b. No Tools called - Stream the content we already got? or Stream request again?
