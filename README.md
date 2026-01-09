@@ -91,29 +91,45 @@ podman-compose up -d
 
 Esto descargará la última imagen (o la construirá si así se configura) y expondrá el puerto 8080.
 
-### 3. Integración MCP Remota (mcphost)
-Para que un LLM interactúe con las herramientas del contenedor, configuramos `mcphost` en el servidor (host).
+## 🧠 Uso de la API (Nativo)
 
-**Paso único de configuración:**
+¡Tu API ahora es inteligente! No necesitas software extra. El contenedor ya incluye todo lo necesario para orquestar herramientas.
 
-1.  **Instalar mcphost** (si no lo tienes):
+### Consumo desde Web/Mobile
+Simplemente consulta el endpoint de chat. La API se encargará de:
+1.  Dialogar con Ollama.
+2.  Ejecutar herramientas locales (como obtener métricas) si Ollama lo pide.
+3.  Devolverte la respuesta final enriquecida.
+
+**Ejemplo de Request:**
+```bash
+curl -X POST "http://localhost:8080/api/v1/ollama/chat?prompt=Dame%20el%20estado%20del%20servidor"
+```
+
+**Respuesta (Automática):**
+> "El servidor está estable. El uso de CPU es del 15% y quedan 8GB de RAM libres..."
+
+---
+
+## 🔧 Uso CLI (Opcional con `mcphost`)
+Si prefieres interactuar desde la terminal usando `mcphost` en lugar de tu API web, puedes seguir haciéndolo.
+
+1.  **Instalar mcphost** (en el host):
     ```bash
     go install github.com/mark3labs/mcphost@latest
     ```
 
-2.  **Conectar mcphost al contenedor**:
-    Usamos `podman exec` para que `mcphost` pueda "hablar" con el binario `mcp` que vive **dentro** del contenedor que acabamos de levantar.
-    
+2.  **Conectar**:
     ```bash
-    # 'go-local-synapse-proxy' es el nombre del contenedor (ver compose.yml)
+    mcphost config set provider ollama
+    mcphost config set ollama-url http://localhost:11434
     mcphost server add local-synapse -- podman exec -i go-local-synapse-proxy /root/mcp
     ```
 
-3.  **¡Listo!**
-    Ahora `mcphost` gestiona la comunicación. No necesitas ejecutar nada más manualmente. Si reinicias el servidor o el contenedor (`podman-compose down/up`), la configuración de `mcphost` persiste y seguirá funcionando automáticamente.
-
-4.  **Uso**:
-    Ahora `mcphost` se comunicará con el proceso `mcp` que vive dentro del contenedor. ¡Sencillo y limpio!
+3.  **Chatear**:
+    ```bash
+    mcphost chat "Estado del sistema"
+    ```
 
 ---
 *Desarrollado con ❤️ por poch.*
