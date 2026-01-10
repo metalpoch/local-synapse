@@ -77,35 +77,84 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 		{Role: "user", Content: userPrompt},
 	}
 
-	// 3. First Request (No streaming to detect tools safely)
+	// 3. First Request (Stream = true)
 	req1 := dto.OllamaChatRequest{
 		Model:    hdlr.Model,
 		Messages: messages,
-		Stream:   false, // Disable streaming for the decision phase
+		Stream:   true,
 		Tools:    tools,
 	}
 
-	log.Printf("[MCP] Sending initial request to Ollama (Tool detection mode)")
-	resp1, err := hdlr.callOllama(ctx, req1)
+	log.Printf("[MCP] Sending initial request to Ollama (Streaming mode)")
+
+	body, err := json.Marshal(req1)
 	if err != nil {
-		log.Printf("[MCP] Initial Ollama call failed: %v", err)
-		return echo.NewHTTPError(http.StatusServiceUnavailable, "Failed to connect to Ollama")
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", hdlr.OllamaURL+"/api/chat", bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var fullContent string
+	var allToolCalls []dto.ToolCall
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		var oRes dto.OllamaChatResponse
+		if err := json.Unmarshal([]byte(line), &oRes); err != nil {
+			log.Printf("Error unmarshalling stream line: %v", err)
+			continue
+		}
+
+		// Accumulate content
+		fullContent += oRes.Message.Content
+		// Accumulate tool calls (if any)
+		if len(oRes.Message.ToolCalls) > 0 {
+			allToolCalls = append(allToolCalls, oRes.Message.ToolCalls...)
+		}
+
+		// Stream to user immediately
+		if isPlain {
+			if _, err := fmt.Fprint(res.Writer, oRes.Message.Content); err != nil {
+				return err
+			}
+		} else {
+			// Forward the exact line from Ollama
+			if _, err := fmt.Fprintf(res.Writer, "data: %s\n\n", line); err != nil {
+				return err
+			}
+		}
+		res.Flush()
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
 	}
 
 	// 4. Check for Tool Calls
-	if len(resp1.Message.ToolCalls) > 0 {
-		log.Printf("[MCP] Ollama requested %d tools", len(resp1.Message.ToolCalls))
+	if len(allToolCalls) > 0 {
+		log.Printf("[MCP] Ollama requested %d tools", len(allToolCalls))
 		// Append assistant's "call" message
 		messages = append(messages, dto.OllamaChatMessage{
-			Role:      resp1.Message.Role, // usually "assistant"
-			Content:   resp1.Message.Content,
-			ToolCalls: resp1.Message.ToolCalls,
+			Role:      "assistant",
+			Content:   fullContent,
+			ToolCalls: allToolCalls,
 		})
 
 		// Execute tools
-		for _, tc := range resp1.Message.ToolCalls {
+		for _, tc := range allToolCalls {
 			log.Printf("[MCP] Executing tool: %s", tc.Function.Name)
-			
+
 			result, err := hdlr.mcpClient.CallTool(ctx, tc.Function.Name, tc.Function.Arguments)
 			content := ""
 			if err != nil {
@@ -141,65 +190,14 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 			Stream:   true,
 			Tools:    tools, // Keep tools enabled just in case (multi-turn)
 		}
-		
-		return hdlr.streamOllama(ctx, req2, res, isPlain)
-	} else {
-		log.Printf("[MCP] No tool calls requested by Ollama")
-	}
 
-	// 5b. No Tools called - Stream the content we already got? or Stream request again?
-	// Since we set Stream=false, we have the full content in resp1.Message.Content.
-	// We can simply write it out.
-	if isPlain {
-		if _, err := fmt.Fprint(res.Writer, resp1.Message.Content); err != nil {
-			return err
-		}
-	} else {
-		// Mock SSE stream for the single response
-		chunkReq := dto.OllamaChatResponse{}
-		chunkReq.Message.Content = resp1.Message.Content
-		chunkReq.Done = true
-		
-		chunkLine, _ := json.Marshal(chunkReq)
-		if _, err := fmt.Fprintf(res.Writer, "data: %s\n\n", chunkLine); err != nil {
-			return err
-		}
+		return hdlr.streamOllama(ctx, req2, res, isPlain)
 	}
-	res.Flush()
 
 	return nil
 }
 
-// Helper to call Ollama (Non-streaming)
-func (hdlr *ollamaHandler) callOllama(ctx context.Context, reqBody dto.OllamaChatRequest) (*dto.OllamaChatResponse, error) {
-	body, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, err
-	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", hdlr.OllamaURL+"/api/chat", bytes.NewBuffer(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ollama returned status: %d", resp.StatusCode)
-	}
-
-	var oRes dto.OllamaChatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&oRes); err != nil {
-		return nil, err
-	}
-	oRes.Message.Role = "assistant" // Ensure role is set
-	return &oRes, nil
-}
 
 // Helper to stream Ollama (Streaming)
 func (hdlr *ollamaHandler) streamOllama(ctx context.Context, reqBody dto.OllamaChatRequest, res *echo.Response, isPlain bool) error {

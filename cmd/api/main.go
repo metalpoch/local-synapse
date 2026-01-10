@@ -21,9 +21,10 @@ var ollamaModel string
 var ollamaUrl string
 var ollamaSystemPrompt string
 var valkeyAddress string
+var valkeyPassword string
 
 func init() {
-	if err := config.ApiEnviroment(&port, &jwtSecret, &ollamaUrl, &ollamaModel, &ollamaSystemPrompt, &valkeyAddress); err != nil {
+	if err := config.ApiEnviroment(&port, &jwtSecret, &ollamaUrl, &ollamaModel, &ollamaSystemPrompt, &valkeyAddress, &valkeyPassword); err != nil {
 		panic(err)
 	}
 
@@ -37,7 +38,7 @@ func main() {
 
 	routes.Init(&routes.Config{
 		Echo:               e,
-		Cache:              cache.NewValkeyClient(valkeyAddress),
+		Cache:              cache.NewValkeyClient(valkeyAddress, valkeyPassword),
 		Secret:             jwtSecret,
 		OllamaUrl:          ollamaUrl,
 		OllamaModel:        ollamaModel,
