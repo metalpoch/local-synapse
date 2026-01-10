@@ -6,7 +6,7 @@ import (
 	"os"
 	"strconv"
 )
-func ApiEnviroment(port, jwtSecret, ollamaUrl, ollamaModel, ollamaSystemPrompt, valkeyAddress *string) error {
+func ApiEnviroment(port, jwtSecret, ollamaUrl, ollamaModel, ollamaSystemPrompt, valkeyAddress, valkeyPassword *string) error {
 	js := os.Getenv("JWT_SECRET")
 	if js == "" {
 		return errors.New("error 'JWT_SECRET' environment variable required.")
@@ -29,7 +29,12 @@ func ApiEnviroment(port, jwtSecret, ollamaUrl, ollamaModel, ollamaSystemPrompt, 
 
 	va := os.Getenv("VALKEY_ADDRESS")
 	if va == "" {
-		va = "127.0.0.1:6379" // Default for local dev
+		va = "127.0.0.1:6379"
+	}
+
+	vp := os.Getenv("VALKEY_PASSWORD")
+	if va == "" {
+		va = "keiber_es_sexy" // Default for local dev
 	}
 
 	p := os.Getenv("PORT")
@@ -47,6 +52,7 @@ func ApiEnviroment(port, jwtSecret, ollamaUrl, ollamaModel, ollamaSystemPrompt, 
 	*ollamaModel = om
 	*ollamaSystemPrompt = osp
 	*valkeyAddress = va
+	*valkeyPassword = vp
 
 	return nil
 }
