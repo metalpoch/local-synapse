@@ -39,6 +39,7 @@ type OllamaChatResponse struct {
 	Message struct {
 		Role      string     `json:"role"`
 		Content   string     `json:"content"`
+		Thinking  string     `json:"thinking,omitempty"`
 		ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 	} `json:"message"`
 	Done bool `json:"done"`
