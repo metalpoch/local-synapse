@@ -1,4 +1,4 @@
-package routes
+package router
 
 import (
 	"context"
@@ -29,6 +29,6 @@ func Init(cfg *Config) {
 		}
 	}
 
-	NewSystemRoutes(cfg.Echo)
-	NewOllamaRoutes(cfg.Echo, cfg.OllamaUrl, cfg.OllamaModel, cfg.OllamaSystemPrompt, mcpClient)
+	SetupSystemRouter(cfg.Echo)
+	SetupOllamaRouter(cfg.Echo, cfg.OllamaUrl, cfg.OllamaModel, cfg.OllamaSystemPrompt, mcpClient)
 }

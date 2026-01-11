@@ -6,7 +6,8 @@ import (
 	"os"
 	"strconv"
 )
-func ApiEnviroment(port, jwtSecret, ollamaUrl, ollamaModel, ollamaSystemPrompt, valkeyAddress, valkeyPassword *string) error {
+
+func ApiEnviroment(port, jwtSecret, ollamaUrl, ollamaModel, ollamaSystemPrompt, valkeyAddress, valkeyPassword, sqliteAddr *string) error {
 	js := os.Getenv("JWT_SECRET")
 	if js == "" {
 		return errors.New("error 'JWT_SECRET' environment variable required.")
@@ -37,6 +38,11 @@ func ApiEnviroment(port, jwtSecret, ollamaUrl, ollamaModel, ollamaSystemPrompt, 
 		va = "keiber_es_sexy" // Default for local dev
 	}
 
+	sa := os.Getenv("SQLITE_ADDRESS")
+	if sa == "" {
+		return errors.New("error 'SQLITE_ADDRESS' environment variable required.")
+	}
+
 	p := os.Getenv("PORT")
 	if p == "" {
 		return errors.New("error 'PORT' environment variable required.")
@@ -53,6 +59,7 @@ func ApiEnviroment(port, jwtSecret, ollamaUrl, ollamaModel, ollamaSystemPrompt, 
 	*ollamaSystemPrompt = osp
 	*valkeyAddress = va
 	*valkeyPassword = vp
+	*sqliteAddr = sa
 
 	return nil
 }

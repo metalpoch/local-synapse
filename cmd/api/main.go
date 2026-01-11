@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -9,10 +11,14 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/valkey-io/valkey-go"
 
 	"github.com/metalpoch/local-synapse/internal/infrastructure/cache"
+	mcpclient "github.com/metalpoch/local-synapse/internal/infrastructure/mcp_client"
+	"github.com/metalpoch/local-synapse/internal/infrastructure/sqlite"
 	"github.com/metalpoch/local-synapse/internal/pkg/config"
-	"github.com/metalpoch/local-synapse/internal/routes"
+	"github.com/metalpoch/local-synapse/internal/repository"
+	"github.com/metalpoch/local-synapse/internal/router"
 )
 
 var jwtSecret string
@@ -22,12 +28,27 @@ var ollamaUrl string
 var ollamaSystemPrompt string
 var valkeyAddress string
 var valkeyPassword string
+var SqliteAddr string
+
+var db *sql.DB
+var vlk *valkey.Client
 
 func init() {
-	if err := config.ApiEnviroment(&port, &jwtSecret, &ollamaUrl, &ollamaModel, &ollamaSystemPrompt, &valkeyAddress, &valkeyPassword); err != nil {
+	if err := config.ApiEnviroment(
+		&port,
+		&jwtSecret,
+		&ollamaUrl,
+		&ollamaModel,
+		&ollamaSystemPrompt,
+		&valkeyAddress,
+		&valkeyPassword,
+		&SqliteAddr,
+	); err != nil {
 		panic(err)
 	}
 
+	db = sqlite.NewSqliteClient(SqliteAddr)
+	vlk = cache.NewValkeyClient(valkeyAddress, valkeyPassword)
 }
 
 func main() {
@@ -36,14 +57,23 @@ func main() {
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
 
-	routes.Init(&routes.Config{
-		Echo:               e,
-		Cache:              cache.NewValkeyClient(valkeyAddress, valkeyPassword),
-		Secret:             jwtSecret,
-		OllamaUrl:          ollamaUrl,
-		OllamaModel:        ollamaModel,
-		OllamaSystemPrompt: ollamaSystemPrompt,
-	})
+	// Initialize MCP Client
+	mcpClient, err := mcpclient.NewStdioClient("./mcp")
+	if err != nil {
+		log.Printf("Failed to create MCP client: %v", err)
+	} else {
+		if err := mcpClient.Initialize(context.Background()); err != nil {
+			log.Printf("Failed to initialize MCP client: %v", err)
+		}
+	}
+
+	// Initialize repositories
+	userRepository := repository.NewUserRepo(db)
+
+	// Setup routes
+	router.SetupSystemRouter(e)
+	router.SetupAuthRouter(e, userRepository)
+	router.SetupOllamaRouter(e, ollamaUrl, ollamaModel, ollamaSystemPrompt, mcpClient)
 
 	go func() {
 		if err := e.Start(port); err != nil && err != http.ErrServerClosed {

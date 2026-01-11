@@ -21,6 +21,7 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-sqlite3 v1.14.33 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
