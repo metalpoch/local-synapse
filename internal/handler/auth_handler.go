@@ -18,7 +18,7 @@ func NewAuthHandler(ul *auth.UserLogin, ur *auth.UserRegister) *authHandler {
 }
 
 func (h *authHandler) Register(c echo.Context) error {
-	var input dto.UserRegister
+	var input dto.UserRegisterRequest
 	err := c.Bind(&input)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
@@ -33,7 +33,7 @@ func (h *authHandler) Register(c echo.Context) error {
 }
 
 func (h *authHandler) Login(c echo.Context) error {
-	var input dto.UserLogin
+	var input dto.UserLoginRequest
 	err := c.Bind(&input)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})

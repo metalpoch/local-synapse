@@ -10,11 +10,11 @@ import (
 
 // StreamChatUsecase orchestrates the chat streaming flow with Ollama
 type StreamChatUsecase struct {
-	ollamaClient  *OllamaClient
-	toolExecutor  *ToolExecutor
-	mcpClient     domain.MCPClient
-	model         string
-	systemPrompt  string
+	ollamaClient *OllamaClient
+	toolExecutor *ToolExecutor
+	mcpClient    domain.MCPClient
+	model        string
+	systemPrompt string
 }
 
 // NewStreamChatUsecase creates a new stream chat usecase
@@ -25,31 +25,24 @@ func NewStreamChatUsecase(
 	mcpClient domain.MCPClient,
 ) *StreamChatUsecase {
 	return &StreamChatUsecase{
-		ollamaClient:  NewOllamaClient(ollamaURL),
-		toolExecutor:  NewToolExecutor(mcpClient),
-		mcpClient:     mcpClient,
-		model:         model,
-		systemPrompt:  systemPrompt,
+		ollamaClient: NewOllamaClient(ollamaURL),
+		toolExecutor: NewToolExecutor(mcpClient),
+		mcpClient:    mcpClient,
+		model:        model,
+		systemPrompt: systemPrompt,
 	}
 }
 
 // StreamChat executes the complete chat flow with tool calling support
 // onChunk is called for each response chunk from Ollama
-func (uc *StreamChatUsecase) StreamChat(
-	ctx context.Context,
-	userPrompt string,
-	onChunk func(dto.OllamaChatResponse) error,
-) error {
-	// 1. Get available MCP tools
+func (uc *StreamChatUsecase) StreamChat(ctx context.Context, userName string, userPrompt string, onChunk func(dto.OllamaChatResponse) error) error {
 	tools := uc.getAvailableTools(ctx)
 
-	// 2. Build initial messages
 	messages := []dto.OllamaChatMessage{
 		{Role: "system", Content: uc.systemPrompt},
 		{Role: "user", Content: userPrompt},
 	}
 
-	// 3. First request to Ollama (streaming)
 	log.Printf("[MCP] Sending initial request to Ollama (Streaming mode)")
 
 	var fullContent string

@@ -12,7 +12,7 @@ import (
 type UserRepository interface {
 	Register(ctx context.Context, user entity.User) (string, error)
 	Login(ctx context.Context, email string) (entity.User, error)
-	GetByID(ctx context.Context, id string) (dto.User, error)
+	GetByID(ctx context.Context, id string) (dto.UserResponse, error)
 }
 
 type userRepo struct {
@@ -45,8 +45,8 @@ func (repo *userRepo) Register(ctx context.Context, user entity.User) (string, e
 	return id, nil
 }
 
-func (repo *userRepo) GetByID(ctx context.Context, id string) (dto.User, error) {
-	var user dto.User
+func (repo *userRepo) GetByID(ctx context.Context, id string) (dto.UserResponse, error) {
+	var user dto.UserResponse
 
 	query := "SELECT id, name, email, image_url FROM users WHERE id = ?"
 

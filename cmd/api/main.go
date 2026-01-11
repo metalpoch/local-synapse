@@ -13,42 +13,50 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/valkey-io/valkey-go"
 
+	"github.com/metalpoch/local-synapse/internal/domain"
 	"github.com/metalpoch/local-synapse/internal/infrastructure/cache"
+	"github.com/metalpoch/local-synapse/internal/infrastructure/database"
 	mcpclient "github.com/metalpoch/local-synapse/internal/infrastructure/mcp_client"
-	"github.com/metalpoch/local-synapse/internal/infrastructure/sqlite"
+	"github.com/metalpoch/local-synapse/internal/pkg/authentication"
 	"github.com/metalpoch/local-synapse/internal/pkg/config"
 	"github.com/metalpoch/local-synapse/internal/repository"
 	"github.com/metalpoch/local-synapse/internal/router"
 )
 
-var jwtSecret string
-var port string
-var ollamaModel string
-var ollamaUrl string
-var ollamaSystemPrompt string
-var valkeyAddress string
-var valkeyPassword string
-var SqliteAddr string
-
-var db *sql.DB
-var vlk *valkey.Client
+var (
+	jwtSecret          string
+	port               string
+	ollamaModel        string
+	ollamaUrl          string
+	ollamaSystemPrompt string
+	valkeyAddress      string
+	valkeyPassword     string
+	SqliteAddr         string
+	db                 *sql.DB
+	vlk                valkey.Client
+	mcpClient          domain.MCPClient
+	accessTokenTTL     time.Duration = 15 * time.Minute
+	refreshToken       time.Duration = 7 * 24 * time.Hour
+)
 
 func init() {
-	if err := config.ApiEnviroment(
-		&port,
-		&jwtSecret,
-		&ollamaUrl,
-		&ollamaModel,
-		&ollamaSystemPrompt,
-		&valkeyAddress,
-		&valkeyPassword,
-		&SqliteAddr,
-	); err != nil {
+	err := config.ApiEnviroment(&port, &jwtSecret, &ollamaUrl, &ollamaModel, &ollamaSystemPrompt, &valkeyAddress, &valkeyPassword, &SqliteAddr)
+	if err != nil {
 		panic(err)
 	}
 
-	db = sqlite.NewSqliteClient(SqliteAddr)
+	db = database.NewSqliteClient(SqliteAddr)
 	vlk = cache.NewValkeyClient(valkeyAddress, valkeyPassword)
+	mcpClient, err = mcpclient.NewStdioClient("./mcp")
+
+	if err != nil {
+		log.Printf("failed to create MCP client: %v", err)
+	} else {
+		if err := mcpClient.Initialize(context.Background()); err != nil {
+			log.Printf("failed to initialize MCP client: %v", err)
+		}
+	}
+
 }
 
 func main() {
@@ -57,27 +65,19 @@ func main() {
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
 
-	// Initialize MCP Client
-	mcpClient, err := mcpclient.NewStdioClient("./mcp")
-	if err != nil {
-		log.Printf("Failed to create MCP client: %v", err)
-	} else {
-		if err := mcpClient.Initialize(context.Background()); err != nil {
-			log.Printf("Failed to initialize MCP client: %v", err)
-		}
-	}
+	authManager := authentication.NewAuthManager([]byte(jwtSecret), vlk, accessTokenTTL, refreshToken)
 
 	// Initialize repositories
 	userRepository := repository.NewUserRepo(db)
 
 	// Setup routes
-	router.SetupSystemRouter(e)
-	router.SetupAuthRouter(e, userRepository)
-	router.SetupOllamaRouter(e, ollamaUrl, ollamaModel, ollamaSystemPrompt, mcpClient)
+	router.SetupSystemRouter(e, authManager)
+	router.SetupAuthRouter(e, authManager, userRepository)
+	router.SetupOllamaRouter(e, ollamaUrl, ollamaModel, ollamaSystemPrompt, mcpClient, authManager, userRepository)
 
 	go func() {
 		if err := e.Start(port); err != nil && err != http.ErrServerClosed {
-			e.Logger.Errorf("Error en el servidor: %v", err)
+			e.Logger.Errorf("server error: %v", err)
 		}
 	}()
 
@@ -86,7 +86,7 @@ func main() {
 	signal.Notify(quit, os.Interrupt)
 	<-quit
 
-	e.Logger.Info("Cerrando el servidor de forma segura...")
+	e.Logger.Info("closing the server securely...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

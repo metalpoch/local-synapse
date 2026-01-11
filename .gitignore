@@ -20,6 +20,7 @@ main_root
 /api
 /synapse
 /mcp
+/test.db
 
 # Astro / Node
 node_modules/

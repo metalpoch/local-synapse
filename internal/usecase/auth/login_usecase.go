@@ -7,20 +7,22 @@ import (
 	"time"
 
 	"github.com/metalpoch/local-synapse/internal/dto"
+	"github.com/metalpoch/local-synapse/internal/pkg/authentication"
 	"github.com/metalpoch/local-synapse/internal/pkg/validator"
 	"github.com/metalpoch/local-synapse/internal/repository"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type UserLogin struct {
-	userRepo repository.UserRepository
+	authManager authentication.AuthManager
+	userRepo    repository.UserRepository
 }
 
-func NewUserLogin(ur repository.UserRepository) *UserLogin {
-	return &UserLogin{ur}
+func NewUserLogin(am authentication.AuthManager, ur repository.UserRepository) *UserLogin {
+	return &UserLogin{am, ur}
 }
 
-func (uc *UserLogin) Execute(input dto.UserLogin) (*dto.User, error) {
+func (uc *UserLogin) Execute(input dto.UserLoginRequest) (*dto.UserResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -35,7 +37,7 @@ func (uc *UserLogin) Execute(input dto.UserLogin) (*dto.User, error) {
 	user, err := uc.userRepo.Login(ctx, input.Email)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("invalid username or password")
-	}else if err != nil {
+	} else if err != nil {
 		return nil, fmt.Errorf("searching for user: %v", err)
 	}
 
@@ -43,13 +45,23 @@ func (uc *UserLogin) Execute(input dto.UserLogin) (*dto.User, error) {
 		return nil, fmt.Errorf("invalid username or password")
 	}
 
-	return &dto.User{
+	accessToken, refreshToken, err := uc.authManager.GenerateTokens(ctx, user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate access token: %v", err)
+	}
+
+	userLogin := dto.UserResponse{
 		ID:           user.ID,
 		Name:         user.Name,
 		Email:        user.Email,
 		AuthProvider: user.AuthProvider,
 		CodeProvider: user.CodeProvider,
 		ImageURL:     user.ImageURL,
-	}, nil
+		Tokens: dto.Tokens{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+		},
+	}
 
+	return &userLogin, nil
 }
