@@ -69,11 +69,25 @@ func main() {
 
 	// Initialize repositories
 	userRepository := repository.NewUserRepo(db)
+	conversationRepository := repository.NewConversationRepository(db)
+
+	// Initialize cache
+	conversationCache := cache.NewConversationCache(vlk)
 
 	// Setup routes
 	router.SetupSystemRouter(e, authManager)
 	router.SetupAuthRouter(e, authManager, userRepository)
-	router.SetupOllamaRouter(e, ollamaUrl, ollamaModel, ollamaSystemPrompt, mcpClient, authManager, userRepository)
+	router.SetupOllamaRouter(
+		e,
+		ollamaUrl,
+		ollamaModel,
+		ollamaSystemPrompt,
+		mcpClient,
+		authManager,
+		userRepository,
+		conversationRepository,
+		conversationCache,
+	)
 
 	go func() {
 		if err := e.Start(port); err != nil && err != http.ErrServerClosed {

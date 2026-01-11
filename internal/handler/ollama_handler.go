@@ -8,7 +8,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/metalpoch/local-synapse/internal/domain"
 	"github.com/metalpoch/local-synapse/internal/dto"
+	"github.com/metalpoch/local-synapse/internal/infrastructure/cache"
 	"github.com/metalpoch/local-synapse/internal/middleware"
+	"github.com/metalpoch/local-synapse/internal/repository"
 	"github.com/metalpoch/local-synapse/internal/usecase/ollama"
 	"github.com/metalpoch/local-synapse/internal/usecase/user"
 )
@@ -18,9 +20,22 @@ type ollamaHandler struct {
 	getUser      *user.GetUser
 }
 
-func NewOllamaHandler(url, model, systemPrompt string, mcpClient domain.MCPClient, gu *user.GetUser) *ollamaHandler {
+func NewOllamaHandler(
+	url, model, systemPrompt string,
+	mcpClient domain.MCPClient,
+	gu *user.GetUser,
+	conversationRepo repository.ConversationRepository,
+	conversationCache cache.ConversationCache,
+) *ollamaHandler {
 	return &ollamaHandler{
-		ollama.NewStreamChatUsecase(url, model, systemPrompt, mcpClient),
+		ollama.NewStreamChatUsecase(
+			url,
+			model,
+			systemPrompt,
+			mcpClient,
+			conversationRepo,
+			conversationCache,
+		),
 		gu,
 	}
 }
@@ -84,9 +99,9 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 	}
 
 	user, err := hdlr.getUser.Execute(userID)
-if userPrompt == "" {
-	return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
 	}
 
-	return hdlr.streamChatUC.StreamChat(ctx, user.Name, userPrompt, onChunk)
+	return hdlr.streamChatUC.StreamChat(ctx, user, userPrompt, onChunk)
 }
