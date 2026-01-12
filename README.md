@@ -11,7 +11,8 @@ Este proyecto está diseñado para desarrolladores que desean exponer sus modelo
 ### 1. Proxy para Ollama
 - **Streaming de alta fidelidad**: Soporte completo para respuestas en tiempo real.
 - **Formatos flexibles**: Soporte nativo de Ollama o texto plano (`format=plain`).
-- **Seguridad**: Capa intermedia para gestionar accesos (futuro).
+- **Persistencia de Contexto**: Mantiene el historial de conversación por usuario utilizando **Valkey** (cache) y **SQLite** (persistencia persistente).
+- **Identificación de Usuario**: El modelo reconoce al usuario actual (nombre y email) mediante inyección automática en el prompt de sistema.
 
 ### 2. Monitor de Sistema
 - Endpoint REST para métricas en tiempo real: `GET /api/v1/system/stats`.
@@ -31,6 +32,8 @@ Sigue estos pasos para configurar tu entorno de desarrollo local.
 ### Prerrequisitos
 - **Go 1.25+** instalado.
 - **Ollama** corriendo localmente (por defecto en port 11434).
+- **Valkey** o Redis accesible para el cache de contexto.
+- **SQLite** para la persistencia de mensajes.
 - **Make** (opcional, para usar el Makefile).
 
 ### 1. Configuración del Entorno
@@ -40,6 +43,9 @@ PORT=8080
 OLLAMA_URL=http://localhost:11434
 OLLAMA_MODEL=llama3
 OLLAMA_SYSTEM_PROMPT="Eres un asistente útil."
+VALKEY_ADDRESS=localhost:6379
+SQLITE_ADDR=test.db
+JWT_SECRET=tu_secreto_super_seguro
 ```
 
 ### 2. Ejecutar la API (Proxy + Métricas)
@@ -65,31 +71,20 @@ echo '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}' | go run ./cmd/mcp/ma
 
 ## 📦 Despliegue (Producción)
 
-### 1. Construcción de Binarios
-Para desplegar en un servidor, primero compila los binarios necesarios.
+### 1. CI/CD con GitHub Actions
+El proyecto cuenta con un flujo automatizado de CI/CD. Cada vez que se realiza un push a la rama principal:
+- Se compilan los binarios y se construye la imagen de contenedor.
+- La imagen se publica automáticamente en **GitHub Container Registry (GHCR)**.
+
+### 2. Despliegue con Podman Compose
+Para desplegar en producción, simplemente utiliza el archivo `compose.yml` incluido. Este descargará la imagen pre-construida desde GHCR.
 
 ```bash
-# Compilar API
-go build -o synapse ./cmd/api/main.go
-
-# Compilar MCP
-go build -o mcp ./cmd/mcp/main.go
-```
-
-Resultados:
-- `synapse`: Ejecutable del servidor web/proxy.
-- `mcp`: Ejecutable del servidor MCP.
-
-### 2. Despliegue con Podman Compose (Producción)
-
-El proyecto está diseñado para desplegarse fácilmente usando `podman-compose`. Esto levantará el contenedor con la API y el servidor MCP listos.
-
-```bash
-# Iniciar todo el stack
+# Iniciar todo el stack usando la imagen de GHCR
 podman-compose up -d
 ```
 
-Esto descargará la última imagen (o la construirá si así se configura) y expondrá el puerto 8080.
+Esto levantará el contenedor `go-local-synapse-proxy` exponiendo el puerto 8080 y configurando todas las variables de entorno necesarias desde tu archivo `.env`.
 
 ## 🧠 Uso de la API (Nativo)
 

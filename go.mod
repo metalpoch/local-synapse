@@ -3,10 +3,13 @@ module github.com/metalpoch/local-synapse
 go 1.25.5
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/labstack/echo/v4 v4.15.0
 	github.com/mark3labs/mcp-go v0.43.2
+	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/shirou/gopsutil/v4 v4.25.12
 	github.com/valkey-io/valkey-go v1.0.70
+	golang.org/x/crypto v0.46.0
 )
 
 require (
@@ -14,8 +17,9 @@ require (
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/ebitengine/purego v0.9.1 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
-	github.com/google/uuid v1.6.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.0 // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
+	github.com/labstack/echo-jwt/v4 v4.4.0 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
@@ -30,7 +34,6 @@ require (
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect

@@ -8,21 +8,41 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/metalpoch/local-synapse/internal/domain"
 	"github.com/metalpoch/local-synapse/internal/dto"
+	"github.com/metalpoch/local-synapse/internal/infrastructure/cache"
+	"github.com/metalpoch/local-synapse/internal/middleware"
+	"github.com/metalpoch/local-synapse/internal/repository"
 	"github.com/metalpoch/local-synapse/internal/usecase/ollama"
+	"github.com/metalpoch/local-synapse/internal/usecase/user"
 )
 
 type ollamaHandler struct {
 	streamChatUC *ollama.StreamChatUsecase
+	getUser      *user.GetUser
 }
 
-func NewOllamaHandler(url, model, systemPrompt string, mcpClient domain.MCPClient) *ollamaHandler {
+func NewOllamaHandler(
+	url, model, systemPrompt string,
+	mcpClient domain.MCPClient,
+	gu *user.GetUser,
+	conversationRepo repository.ConversationRepository,
+	conversationCache cache.ConversationCache,
+) *ollamaHandler {
 	return &ollamaHandler{
-		streamChatUC: ollama.NewStreamChatUsecase(url, model, systemPrompt, mcpClient),
+		ollama.NewStreamChatUsecase(
+			url,
+			model,
+			systemPrompt,
+			mcpClient,
+			conversationRepo,
+			conversationCache,
+		),
+		gu,
 	}
 }
 
 func (hdlr *ollamaHandler) Stream(c echo.Context) error {
-	// 1. Extract request parameters
+	userID, _ := middleware.GetUserID(c)
+
 	userPrompt := c.QueryParam("prompt")
 	if userPrompt == "" {
 		return c.String(http.StatusBadRequest, "Query parameter 'prompt' is required")
@@ -31,7 +51,7 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 	format := c.QueryParam("format")
 	isPlain := format == "plain"
 
-	// 2. Configure response headers
+	// Set up streaming response headers
 	res := c.Response()
 	if isPlain {
 		res.Header().Set(echo.HeaderContentType, echo.MIMETextPlainCharsetUTF8)
@@ -46,12 +66,11 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 
 	ctx := c.Request().Context()
 
-	// 3. Define chunk handler for streaming
+	// Process each response chunk from the LLM
 	onChunk := func(chunk dto.OllamaChatResponse) error {
 		if isPlain {
-			// Plain text format - send thinking and content
 			if chunk.Message.Thinking != "" {
-				if _, err := fmt.Fprintf(res.Writer, "[Pensando: %s]\n", chunk.Message.Thinking); err != nil {
+				if _, err := fmt.Fprintf(res.Writer, "[Thinking: %s]\n", chunk.Message.Thinking); err != nil {
 					return err
 				}
 			}
@@ -61,12 +80,11 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 				}
 			}
 		} else {
-			// SSE format - only send chunks with actual content or thinking
+			// Skip chunks without relevant updates for SSE
 			if chunk.Message.Content == "" && chunk.Message.Thinking == "" && len(chunk.Message.ToolCalls) == 0 {
-				// Skip empty chunks
 				return nil
 			}
-			
+
 			jsonData, err := json.Marshal(chunk)
 			if err != nil {
 				return err
@@ -79,6 +97,10 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 		return nil
 	}
 
-	// 4. Execute usecase
-	return hdlr.streamChatUC.StreamChat(ctx, userPrompt, onChunk)
+	user, err := hdlr.getUser.Execute(userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return hdlr.streamChatUC.StreamChat(ctx, user, userPrompt, onChunk)
 }
