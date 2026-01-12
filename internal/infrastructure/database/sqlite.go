@@ -6,6 +6,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// NewSqliteClient initializes the database connection and runs migrations.
 func NewSqliteClient(addr string) *sql.DB {
 	db, err := sql.Open("sqlite3", addr)
 	if err != nil {
@@ -17,7 +18,9 @@ func NewSqliteClient(addr string) *sql.DB {
 	return db
 }
 
+// initDB defines the schema and ensures all tables and triggers exist.
 func initDB(db *sql.DB) {
+	// User accounts and authentication details
 	tableUsers := `CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -37,6 +40,7 @@ func initDB(db *sql.DB) {
   	UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
 	END;`
 
+	// Chat session metadata
 	tableConversations := `CREATE TABLE IF NOT EXISTS chat_conversations (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -53,6 +57,7 @@ func initDB(db *sql.DB) {
   	UPDATE chat_conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
 	END;`
 
+	// Individual messages within a conversation
 	tableMessages := `CREATE TABLE IF NOT EXISTS chat_messages (
     id TEXT PRIMARY KEY,
     conversation_id TEXT NOT NULL,
@@ -80,5 +85,4 @@ func initDB(db *sql.DB) {
 			panic(err)
 		}
 	}
-
 }

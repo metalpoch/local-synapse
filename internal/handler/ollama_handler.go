@@ -51,7 +51,7 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 	format := c.QueryParam("format")
 	isPlain := format == "plain"
 
-	// Configure response headers
+	// Set up streaming response headers
 	res := c.Response()
 	if isPlain {
 		res.Header().Set(echo.HeaderContentType, echo.MIMETextPlainCharsetUTF8)
@@ -66,11 +66,11 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 
 	ctx := c.Request().Context()
 
-	// Define chunk handler for streaming
+	// Process each response chunk from the LLM
 	onChunk := func(chunk dto.OllamaChatResponse) error {
 		if isPlain {
 			if chunk.Message.Thinking != "" {
-				if _, err := fmt.Fprintf(res.Writer, "[Pensando: %s]\n", chunk.Message.Thinking); err != nil {
+				if _, err := fmt.Fprintf(res.Writer, "[Thinking: %s]\n", chunk.Message.Thinking); err != nil {
 					return err
 				}
 			}
@@ -80,9 +80,8 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 				}
 			}
 		} else {
-			// SSE format - only send chunks with actual content or thinking
+			// Skip chunks without relevant updates for SSE
 			if chunk.Message.Content == "" && chunk.Message.Thinking == "" && len(chunk.Message.ToolCalls) == 0 {
-				// Skip empty chunks
 				return nil
 			}
 

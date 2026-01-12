@@ -23,6 +23,7 @@ func NewUserRepo(db *sql.DB) *userRepo {
 	return &userRepo{db}
 }
 
+// Register creates a new user record in the database.
 func (repo *userRepo) Register(ctx context.Context, user entity.User) (string, error) {
 	id := uuid.New().String()
 	query := "INSERT INTO users(id, name, email, password, auth_provider, code_provider) VALUES(?, ?, ?, ?, ?, ?)"
@@ -45,6 +46,7 @@ func (repo *userRepo) Register(ctx context.Context, user entity.User) (string, e
 	return id, nil
 }
 
+// GetByID retrieves user details for a given ID.
 func (repo *userRepo) GetByID(ctx context.Context, id string) (dto.UserResponse, error) {
 	var user dto.UserResponse
 
@@ -55,6 +57,7 @@ func (repo *userRepo) GetByID(ctx context.Context, id string) (dto.UserResponse,
 	return user, err
 }
 
+// Login fetches user authentication data by email.
 func (repo *userRepo) Login(ctx context.Context, email string) (entity.User, error) {
 	var user entity.User
 

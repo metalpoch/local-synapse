@@ -44,24 +44,22 @@ func NewStreamChatUsecase(
 	}
 }
 
-// StreamChat executes the complete chat flow with tool calling support
-// onChunk is called for each response chunk from Ollama
+// StreamChat handles the full chat flow with Ollama, including tool calling and persistence.
 func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserResponse, userPrompt string, onChunk func(dto.OllamaChatResponse) error) error {
 	tools := uc.getAvailableTools(ctx)
 
-	// 1. Obtener o crear conversación activa
+	// Fetch or start a new conversation for the user
 	conversation, err := uc.conversationRepo.GetOrCreateActiveConversation(user.ID)
 	if err != nil {
 		log.Printf("[Context] Error getting/creating conversation: %v", err)
 		return fmt.Errorf("failed to get conversation: %w", err)
 	}
 
-	// 2. Intentar cargar contexto del cache
+	// Try loading context from cache first
 	var messages []dto.OllamaChatMessage
 	cachedMessages, err := uc.conversationCache.GetConversationFromCache(ctx, user.ID)
 	
 	if err != nil || len(cachedMessages) == 0 {
-		// 3. Si no está en cache, cargar desde DB
 		log.Printf("[Context] Cache miss, loading from DB for user %s", user.ID)
 		dbMessages, err := uc.conversationRepo.GetConversationMessages(conversation.ID, 20)
 		if err != nil {
@@ -74,28 +72,26 @@ func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserRespo
 		messages = cachedMessages
 	}
 
-	// 4. Inyectar información del usuario en el system prompt
-	personalizedPrompt := fmt.Sprintf("%s\n\nUsuario actual: %s (Email: %s)", 
+	// Add user details to the system prompt to personalize the interaction
+	personalizedPrompt := fmt.Sprintf("%s\n\nActive user: %s (Email: %s)", 
 		uc.systemPrompt, user.Name, user.Email)
 
-	// 5. Si no hay mensajes previos, agregar el system prompt
+	// Ensure the system prompt is always at the start
 	if len(messages) == 0 {
 		messages = []dto.OllamaChatMessage{
 			{Role: "system", Content: personalizedPrompt},
 		}
 	} else {
-		// Actualizar el system prompt si ya existe
 		if messages[0].Role == "system" {
 			messages[0].Content = personalizedPrompt
 		} else {
-			// Insertar al inicio si no existe
 			messages = append([]dto.OllamaChatMessage{
 				{Role: "system", Content: personalizedPrompt},
 			}, messages...)
 		}
 	}
 
-	// 6. Agregar el nuevo mensaje del usuario
+	// Add the new user message to the stack
 	messages = append(messages, dto.OllamaChatMessage{
 		Role:    "user",
 		Content: userPrompt,
@@ -113,15 +109,12 @@ func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserRespo
 		Tools:    tools,
 	}
 
-	// 7. Stream first response and accumulate content/tool calls
+	// Stream the first response and gather chunks
 	err = uc.ollamaClient.StreamChatRequest(ctx, request, func(chunk dto.OllamaChatResponse) error {
-		// Accumulate content and tool calls
 		fullContent += chunk.Message.Content
 		if len(chunk.Message.ToolCalls) > 0 {
 			allToolCalls = append(allToolCalls, chunk.Message.ToolCalls...)
 		}
-
-		// Forward chunk to caller
 		return onChunk(chunk)
 	})
 
@@ -129,31 +122,25 @@ func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserRespo
 		return err
 	}
 
-	// 8. Check if tools were called
+	// Handle tool execution if requested by the model
 	if len(allToolCalls) > 0 {
 		log.Printf("[MCP] Ollama requested %d tools", len(allToolCalls))
 
-		// Append assistant's message with tool calls
 		messages = append(messages, dto.OllamaChatMessage{
 			Role:      "assistant",
 			Content:   fullContent,
 			ToolCalls: allToolCalls,
 		})
 
-		// Execute tools
 		toolMessages, err := uc.toolExecutor.ExecuteToolCalls(ctx, allToolCalls)
 		if err != nil {
 			log.Printf("[MCP] Tool execution error: %v", err)
-			// Continue anyway with error messages
 		}
 
-		// Append tool results to messages
 		messages = append(messages, toolMessages...)
 
-		// 9. Final request with tool results
 		log.Printf("[MCP] Sending final request with tool results")
 		
-		// Reset fullContent for final response
 		fullContent = ""
 		allToolCalls = nil
 		
@@ -161,11 +148,10 @@ func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserRespo
 			Model:    uc.model,
 			Messages: messages,
 			Stream:   true,
-			Tools:    tools, // Keep tools enabled for multi-turn
+			Tools:    tools,
 		}
 
 		err = uc.ollamaClient.StreamChatRequest(ctx, finalRequest, func(chunk dto.OllamaChatResponse) error {
-			// Accumulate final content
 			fullContent += chunk.Message.Content
 			if len(chunk.Message.ToolCalls) > 0 {
 				allToolCalls = append(allToolCalls, chunk.Message.ToolCalls...)
@@ -178,13 +164,13 @@ func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserRespo
 		}
 	}
 
-	// 10. Guardar mensajes en la base de datos
+	// Persist the conversation context asynchronously
 	go uc.saveConversationContext(context.Background(), conversation.ID, user.ID, userPrompt, fullContent, allToolCalls, messages)
 
 	return nil
 }
 
-// getAvailableTools fetches available tools from MCP client
+// getAvailableTools fetches tools from the MCP client
 func (uc *StreamChatUsecase) getAvailableTools(ctx context.Context) []dto.Tool {
 	var tools []dto.Tool
 
@@ -218,7 +204,7 @@ func (uc *StreamChatUsecase) getAvailableTools(ctx context.Context) []dto.Tool {
 	return tools
 }
 
-// convertMessagesToDTO converts entity messages to DTO messages
+// convertMessagesToDTO maps persistence entities to communication DTOs
 func convertMessagesToDTO(dbMessages []entity.Message) []dto.OllamaChatMessage {
 	messages := make([]dto.OllamaChatMessage, 0, len(dbMessages))
 	
@@ -228,7 +214,6 @@ func convertMessagesToDTO(dbMessages []entity.Message) []dto.OllamaChatMessage {
 			Content: msg.Content,
 		}
 		
-		// Deserializar tool calls si existen
 		if msg.ToolCalls != nil && *msg.ToolCalls != "" {
 			var toolCalls []dto.ToolCall
 			if err := json.Unmarshal([]byte(*msg.ToolCalls), &toolCalls); err == nil {
@@ -242,7 +227,7 @@ func convertMessagesToDTO(dbMessages []entity.Message) []dto.OllamaChatMessage {
 	return messages
 }
 
-// saveConversationContext guarda el contexto de la conversación en DB y cache
+// saveConversationContext persists the chat session to both the database and cache
 func (uc *StreamChatUsecase) saveConversationContext(
 	ctx context.Context,
 	conversationID string,
@@ -252,7 +237,7 @@ func (uc *StreamChatUsecase) saveConversationContext(
 	toolCalls []dto.ToolCall,
 	allMessages []dto.OllamaChatMessage,
 ) {
-	// Guardar mensaje del usuario
+	// Store user input
 	userMsg := &entity.Message{
 		ConversationID: conversationID,
 		Role:           "user",
@@ -263,14 +248,13 @@ func (uc *StreamChatUsecase) saveConversationContext(
 		log.Printf("[Context] Error saving user message: %v", err)
 	}
 	
-	// Guardar respuesta del asistente
+	// Store assistant response
 	assistantMsg := &entity.Message{
 		ConversationID: conversationID,
 		Role:           "assistant",
 		Content:        assistantContent,
 	}
 	
-	// Serializar tool calls si existen
 	if len(toolCalls) > 0 {
 		toolCallsJSON, err := json.Marshal(toolCalls)
 		if err == nil {
@@ -283,7 +267,7 @@ func (uc *StreamChatUsecase) saveConversationContext(
 		log.Printf("[Context] Error saving assistant message: %v", err)
 	}
 	
-	// Actualizar cache con todos los mensajes
+	// Update cache with the latest state
 	if err := uc.conversationCache.SaveConversationToCache(ctx, userID, allMessages); err != nil {
 		log.Printf("[Context] Error updating cache: %v", err)
 	} else {

@@ -29,7 +29,7 @@ func NewConversationCache(client valkey.Client) ConversationCache {
 	return &conversationCache{client: client}
 }
 
-// GetConversationFromCache obtiene la conversación del cache
+// GetConversationFromCache retrieves the conversation history from the Valkey storage.
 func (c *conversationCache) GetConversationFromCache(ctx context.Context, userID string) ([]dto.OllamaChatMessage, error) {
 	if c.client == nil {
 		return nil, fmt.Errorf("valkey client is nil")
@@ -52,7 +52,7 @@ func (c *conversationCache) GetConversationFromCache(ctx context.Context, userID
 	return messages, nil
 }
 
-// SaveConversationToCache guarda la conversación en el cache con TTL
+// SaveConversationToCache stores the conversation history with a TTL.
 func (c *conversationCache) SaveConversationToCache(ctx context.Context, userID string, messages []dto.OllamaChatMessage) error {
 	if c.client == nil {
 		return fmt.Errorf("valkey client is nil")
@@ -74,7 +74,7 @@ func (c *conversationCache) SaveConversationToCache(ctx context.Context, userID 
 	return nil
 }
 
-// InvalidateConversation elimina la conversación del cache
+// InvalidateConversation removes the conversation record from the cache.
 func (c *conversationCache) InvalidateConversation(ctx context.Context, userID string) error {
 	if c.client == nil {
 		return fmt.Errorf("valkey client is nil")

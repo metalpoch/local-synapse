@@ -23,9 +23,8 @@ func NewConversationRepository(db *sql.DB) ConversationRepository {
 	return &conversationRepository{db: db}
 }
 
-// GetOrCreateActiveConversation obtiene la conversación más reciente del usuario o crea una nueva
+// GetOrCreateActiveConversation returns the user's most recent conversation or starts a new one.
 func (r *conversationRepository) GetOrCreateActiveConversation(userID string) (*entity.Conversation, error) {
-	// Intentar obtener la conversación más reciente
 	query := `SELECT id, user_id, title, created_at, updated_at 
 	          FROM chat_conversations 
 	          WHERE user_id = ? 
@@ -42,7 +41,6 @@ func (r *conversationRepository) GetOrCreateActiveConversation(userID string) (*
 	)
 
 	if err == sql.ErrNoRows {
-		// No existe conversación, crear una nueva
 		return r.CreateConversation(userID)
 	}
 
@@ -53,7 +51,7 @@ func (r *conversationRepository) GetOrCreateActiveConversation(userID string) (*
 	return &conv, nil
 }
 
-// GetConversationMessages obtiene los últimos N mensajes de una conversación
+// GetConversationMessages retrieves the last N messages from a specific conversation.
 func (r *conversationRepository) GetConversationMessages(conversationID string, limit int) ([]entity.Message, error) {
 	query := `SELECT id, conversation_id, role, content, tool_calls, created_at 
 	          FROM chat_messages 
@@ -91,7 +89,7 @@ func (r *conversationRepository) GetConversationMessages(conversationID string, 
 	return messages, nil
 }
 
-// SaveMessage guarda un nuevo mensaje en la base de datos
+// SaveMessage persists a new message and updates the conversation timestamp.
 func (r *conversationRepository) SaveMessage(message *entity.Message) error {
 	if message.ID == "" {
 		message.ID = uuid.New().String()
@@ -112,7 +110,6 @@ func (r *conversationRepository) SaveMessage(message *entity.Message) error {
 		return fmt.Errorf("error saving message: %w", err)
 	}
 
-	// Actualizar el updated_at de la conversación
 	updateQuery := `UPDATE chat_conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`
 	_, err = r.db.Exec(updateQuery, message.ConversationID)
 	if err != nil {
@@ -122,7 +119,7 @@ func (r *conversationRepository) SaveMessage(message *entity.Message) error {
 	return nil
 }
 
-// CreateConversation crea una nueva conversación para un usuario
+// CreateConversation initializes a new empty conversation for a user.
 func (r *conversationRepository) CreateConversation(userID string) (*entity.Conversation, error) {
 	conv := &entity.Conversation{
 		ID:     uuid.New().String(),
@@ -135,11 +132,10 @@ func (r *conversationRepository) CreateConversation(userID string) (*entity.Conv
 		return nil, fmt.Errorf("error creating conversation: %w", err)
 	}
 
-	// Obtener la conversación completa con timestamps
 	return r.getConversationByID(conv.ID)
 }
 
-// getConversationByID obtiene una conversación por su ID
+// getConversationByID fetches a single conversation record by its ID.
 func (r *conversationRepository) getConversationByID(id string) (*entity.Conversation, error) {
 	query := `SELECT id, user_id, title, created_at, updated_at 
 	          FROM chat_conversations 

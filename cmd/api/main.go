@@ -65,16 +65,15 @@ func main() {
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
 
+	// Global authentication manager
 	authManager := authentication.NewAuthManager([]byte(jwtSecret), vlk, accessTokenTTL, refreshToken)
 
-	// Initialize repositories
+	// Initialize persistence and cache layers
 	userRepository := repository.NewUserRepo(db)
 	conversationRepository := repository.NewConversationRepository(db)
-
-	// Initialize cache
 	conversationCache := cache.NewConversationCache(vlk)
 
-	// Setup routes
+	// Register all application routes
 	router.SetupSystemRouter(e, authManager)
 	router.SetupAuthRouter(e, authManager, userRepository)
 	router.SetupOllamaRouter(
@@ -89,13 +88,14 @@ func main() {
 		conversationCache,
 	)
 
+	// Start the server in a background goroutine
 	go func() {
 		if err := e.Start(port); err != nil && err != http.ErrServerClosed {
 			e.Logger.Errorf("server error: %v", err)
 		}
 	}()
 
-	//  Graceful Shutdown
+	// Wait for termination signal for graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
 	<-quit
