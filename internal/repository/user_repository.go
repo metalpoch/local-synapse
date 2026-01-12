@@ -50,9 +50,9 @@ func (repo *userRepo) Register(ctx context.Context, user entity.User) (string, e
 func (repo *userRepo) GetByID(ctx context.Context, id string) (dto.UserResponse, error) {
 	var user dto.UserResponse
 
-	query := "SELECT id, name, email, image_url FROM users WHERE id = ?"
+	query := "SELECT id, name, email, image_url, auth_provider, code_provider FROM users WHERE id = ?"
 
-	err := repo.db.QueryRowContext(ctx, query, id).Scan(&user.ID, &user.Name, &user.Email, &user.ImageURL)
+	err := repo.db.QueryRowContext(ctx, query, id).Scan(&user.ID, &user.Name, &user.Email, &user.ImageURL, &user.AuthProvider, &user.CodeProvider)
 
 	return user, err
 }
