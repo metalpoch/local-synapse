@@ -192,7 +192,62 @@ func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserRespo
 	return nil
 }
 
-// ... (getAvailableTools and convertMessagesToDTO omitted for brevity but remain unchanged)
+// getAvailableTools fetches tools from the MCP client
+func (uc *StreamChatUsecase) getAvailableTools(ctx context.Context) []dto.Tool {
+	var tools []dto.Tool
+
+	if uc.mcpClient == nil {
+		return tools
+	}
+
+	mcpTools, err := uc.mcpClient.ListTools(ctx)
+	if err != nil {
+		log.Printf("[MCP] Error listing tools: %v", err)
+		return tools
+	}
+
+	if len(mcpTools) == 0 {
+		return tools
+	}
+
+	log.Printf("[MCP] Discovered %d tools", len(mcpTools))
+
+	for _, t := range mcpTools {
+		tools = append(tools, dto.Tool{
+			Type: "function",
+			Function: dto.ToolFunction{
+				Name:        t.Name,
+				Description: t.Description,
+				Parameters:  t.InputSchema,
+			},
+		})
+	}
+
+	return tools
+}
+
+// convertMessagesToDTO maps persistence entities to communication DTOs
+func convertMessagesToDTO(dbMessages []entity.Message) []dto.OllamaChatMessage {
+	messages := make([]dto.OllamaChatMessage, 0, len(dbMessages))
+	
+	for _, msg := range dbMessages {
+		dtoMsg := dto.OllamaChatMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+		
+		if msg.ToolCalls != nil && *msg.ToolCalls != "" {
+			var toolCalls []dto.ToolCall
+			if err := json.Unmarshal([]byte(*msg.ToolCalls), &toolCalls); err == nil {
+				dtoMsg.ToolCalls = toolCalls
+			}
+		}
+		
+		messages = append(messages, dtoMsg)
+	}
+	
+	return messages
+}
 
 // saveConversationContext persists the chat session to both the database and cache
 func (uc *StreamChatUsecase) saveConversationContext(
