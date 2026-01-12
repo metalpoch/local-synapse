@@ -94,6 +94,11 @@ Esto levantará el contenedor `go-local-synapse-proxy` exponiendo el puerto 8080
 
 ¡Tu API ahora es inteligente! No necesitas software extra. El contenedor ya incluye todo lo necesario para orquestar herramientas.
 
+### Usuarios y Sesión
+- **Validar Sesión**: `GET /api/v1/auth/me` (Requiere JWT). Retorna los datos del usuario actual.
+- **Login**: `POST /api/v1/auth/login`.
+- **Registro**: `POST /api/v1/auth/register`.
+
 ### Consumo desde Web/Mobile
 Simplemente consulta el endpoint de chat. La API se encargará de:
 1.  Dialogar con Ollama.
