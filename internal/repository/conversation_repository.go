@@ -11,6 +11,7 @@ import (
 type ConversationRepository interface {
 	GetOrCreateActiveConversation(userID string) (*entity.Conversation, error)
 	GetConversationMessages(conversationID string, limit int) ([]entity.Message, error)
+	GetFullConversationHistory(conversationID string) ([]entity.Message, error)
 	SaveMessage(message *entity.Message) error
 	CreateConversation(userID string) (*entity.Conversation, error)
 }
@@ -87,6 +88,39 @@ func (r *conversationRepository) GetConversationMessages(conversationID string, 
 
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating messages: %w", err)
+	}
+
+	return messages, nil
+}
+
+// GetFullConversationHistory retrieves all messages from a specific conversation.
+func (r *conversationRepository) GetFullConversationHistory(conversationID string) ([]entity.Message, error) {
+	query := `SELECT id, conversation_id, role, content, tool_calls, created_at 
+	          FROM chat_messages 
+	          WHERE conversation_id = ? 
+	          ORDER BY created_at ASC`
+
+	rows, err := r.db.Query(query, conversationID)
+	if err != nil {
+		return nil, fmt.Errorf("error querying full history: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []entity.Message
+	for rows.Next() {
+		var msg entity.Message
+		err := rows.Scan(
+			&msg.ID,
+			&msg.ConversationID,
+			&msg.Role,
+			&msg.Content,
+			&msg.ToolCalls,
+			&msg.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning message: %w", err)
+		}
+		messages = append(messages, msg)
 	}
 
 	return messages, nil

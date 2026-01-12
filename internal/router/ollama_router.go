@@ -32,4 +32,5 @@ func SetupOllamaRouter(
 
 	router := e.Group("/api/v1/ollama", middleware.AuthMiddleware(am))
 	router.GET("/chat", h.Stream)
+	router.GET("/history", h.History)
 }

@@ -17,6 +17,7 @@ import (
 
 type ollamaHandler struct {
 	streamChatUC *ollama.StreamChatUsecase
+	getHistoryUC *ollama.GetChatHistory
 	getUser      *user.GetUser
 }
 
@@ -36,6 +37,7 @@ func NewOllamaHandler(
 			conversationRepo,
 			conversationCache,
 		),
+		ollama.NewGetChatHistory(conversationRepo),
 		gu,
 	}
 }
@@ -103,4 +105,19 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 	}
 
 	return hdlr.streamChatUC.StreamChat(ctx, user, userPrompt, onChunk)
+}
+
+func (h *ollamaHandler) History(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
+	}
+
+	ctx := c.Request().Context()
+	history, err := h.getHistoryUC.Execute(ctx, userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, history)
 }

@@ -61,7 +61,7 @@ func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserRespo
 	
 	if err != nil || len(cachedMessages) == 0 {
 		log.Printf("[Context] Cache miss, loading from DB for user %s", user.ID)
-		dbMessages, err := uc.conversationRepo.GetConversationMessages(conversation.ID, 20)
+		dbMessages, err := uc.conversationRepo.GetConversationMessages(conversation.ID, 50)
 		if err != nil {
 			log.Printf("[Context] Error loading messages from DB: %v", err)
 		} else {
