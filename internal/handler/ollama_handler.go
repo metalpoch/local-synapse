@@ -18,6 +18,9 @@ import (
 type ollamaHandler struct {
 	streamChatUC *ollama.StreamChatUsecase
 	getHistoryUC *ollama.GetChatHistory
+	listConvUC    *ollama.ListConversations
+	createConvUC  *ollama.CreateConversation
+	deleteConvUC  *ollama.DeleteConversation
 	getUser      *user.GetUser
 }
 
@@ -38,11 +41,14 @@ func NewOllamaHandler(
 			conversationCache,
 		),
 		ollama.NewGetChatHistory(conversationRepo),
+		ollama.NewListConversations(conversationRepo),
+		ollama.NewCreateConversation(conversationRepo),
+		ollama.NewDeleteConversation(conversationRepo),
 		gu,
 	}
 }
 
-func (hdlr *ollamaHandler) Stream(c echo.Context) error {
+func (h *ollamaHandler) Stream(c echo.Context) error {
 	userID, _ := middleware.GetUserID(c)
 
 	userPrompt := c.QueryParam("prompt")
@@ -99,12 +105,14 @@ func (hdlr *ollamaHandler) Stream(c echo.Context) error {
 		return nil
 	}
 
-	user, err := hdlr.getUser.Execute(userID)
+	user, err := h.getUser.Execute(userID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
 	}
 
-	return hdlr.streamChatUC.StreamChat(ctx, user, userPrompt, onChunk)
+	convID := c.QueryParam("conversation_id")
+
+	return h.streamChatUC.StreamChat(ctx, user, convID, userPrompt, onChunk)
 }
 
 func (h *ollamaHandler) History(c echo.Context) error {
@@ -113,11 +121,62 @@ func (h *ollamaHandler) History(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
 	}
 
+	convID := c.QueryParam("conversation_id")
 	ctx := c.Request().Context()
-	history, err := h.getHistoryUC.Execute(ctx, userID)
+	history, err := h.getHistoryUC.Execute(ctx, userID, convID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
 	}
 
 	return c.JSON(http.StatusOK, history)
+}
+
+func (h *ollamaHandler) ListConversations(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
+	}
+
+	ctx := c.Request().Context()
+	conversations, err := h.listConvUC.Execute(ctx, userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, conversations)
+}
+
+func (h *ollamaHandler) CreateConversation(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
+	}
+
+	ctx := c.Request().Context()
+	conv, err := h.createConvUC.Execute(ctx, userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, conv)
+}
+
+func (h *ollamaHandler) DeleteConversation(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
+	}
+
+	id := c.Param("id")
+	if id == "" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "missing conversation id"})
+	}
+
+	ctx := c.Request().Context()
+	err := h.deleteConvUC.Execute(ctx, id, userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{"message": "conversation deleted successfully"})
 }

@@ -33,4 +33,7 @@ func SetupOllamaRouter(
 	router := e.Group("/api/v1/ollama", middleware.AuthMiddleware(am))
 	router.GET("/chat", h.Stream)
 	router.GET("/history", h.History)
+	router.GET("/conversations", h.ListConversations)
+	router.POST("/conversations", h.CreateConversation)
+	router.DELETE("/conversations/:id", h.DeleteConversation)
 }

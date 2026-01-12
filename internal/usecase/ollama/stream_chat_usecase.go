@@ -45,22 +45,35 @@ func NewStreamChatUsecase(
 }
 
 // StreamChat handles the full chat flow with Ollama, including tool calling and persistence.
-func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserResponse, userPrompt string, onChunk func(dto.OllamaChatResponse) error) error {
+func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserResponse, conversationID, userPrompt string, onChunk func(dto.OllamaChatResponse) error) error {
 	tools := uc.getAvailableTools(ctx)
 
-	// Fetch or start a new conversation for the user
-	conversation, err := uc.conversationRepo.GetOrCreateActiveConversation(user.ID)
-	if err != nil {
-		log.Printf("[Context] Error getting/creating conversation: %v", err)
-		return fmt.Errorf("failed to get conversation: %w", err)
+	var conversation *entity.Conversation
+	var err error
+
+	if conversationID != "" {
+		conversation, err = uc.conversationRepo.GetConversationByID(conversationID, user.ID)
+		if err != nil {
+			return fmt.Errorf("failed to get conversation: %w", err)
+		}
+		if conversation == nil {
+			return fmt.Errorf("conversation not found or not owned by user")
+		}
+	} else {
+		// Fetch or start a new conversation for the user
+		conversation, err = uc.conversationRepo.GetOrCreateActiveConversation(user.ID)
+		if err != nil {
+			log.Printf("[Context] Error getting/creating conversation: %v", err)
+			return fmt.Errorf("failed to get conversation: %w", err)
+		}
 	}
 
 	// Try loading context from cache first
 	var messages []dto.OllamaChatMessage
-	cachedMessages, err := uc.conversationCache.GetConversationFromCache(ctx, user.ID)
+	cachedMessages, err := uc.conversationCache.GetConversationFromCache(ctx, conversation.ID)
 	
 	if err != nil || len(cachedMessages) == 0 {
-		log.Printf("[Context] Cache miss, loading from DB for user %s", user.ID)
+		log.Printf("[Context] Cache miss, loading from DB for conversation %s", conversation.ID)
 		dbMessages, err := uc.conversationRepo.GetConversationMessages(conversation.ID, 50)
 		if err != nil {
 			log.Printf("[Context] Error loading messages from DB: %v", err)
@@ -68,7 +81,7 @@ func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserRespo
 			messages = convertMessagesToDTO(dbMessages)
 		}
 	} else {
-		log.Printf("[Context] Cache hit, loaded %d messages for user %s", len(cachedMessages), user.ID)
+		log.Printf("[Context] Cache hit, loaded %d messages for conversation %s", len(cachedMessages), conversation.ID)
 		messages = cachedMessages
 	}
 
@@ -277,10 +290,10 @@ func (uc *StreamChatUsecase) saveConversationContext(
 	}
 	
 	// Update cache with the latest state
-	if err := uc.conversationCache.SaveConversationToCache(ctx, userID, allMessages); err != nil {
+	if err := uc.conversationCache.SaveConversationToCache(ctx, conversationID, allMessages); err != nil {
 		log.Printf("[Context] Error updating cache: %v", err)
 	} else {
-		log.Printf("[Context] Cache updated for user %s", userID)
+		log.Printf("[Context] Cache updated for conversation %s", conversationID)
 	}
 }
 

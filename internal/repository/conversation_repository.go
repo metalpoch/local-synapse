@@ -12,6 +12,9 @@ type ConversationRepository interface {
 	GetOrCreateActiveConversation(userID string) (*entity.Conversation, error)
 	GetConversationMessages(conversationID string, limit int) ([]entity.Message, error)
 	GetFullConversationHistory(conversationID string) ([]entity.Message, error)
+	GetConversations(userID string) ([]entity.Conversation, error)
+	GetConversationByID(id string, userID string) (*entity.Conversation, error)
+	DeleteConversation(id string, userID string) error
 	SaveMessage(message *entity.Message) error
 	CreateConversation(userID string) (*entity.Conversation, error)
 }
@@ -96,9 +99,12 @@ func (r *conversationRepository) GetConversationMessages(conversationID string, 
 // GetFullConversationHistory retrieves all messages from a specific conversation.
 func (r *conversationRepository) GetFullConversationHistory(conversationID string) ([]entity.Message, error) {
 	query := `SELECT id, conversation_id, role, content, tool_calls, created_at 
-	          FROM chat_messages 
-	          WHERE conversation_id = ? 
-	          ORDER BY created_at ASC`
+	          FROM (
+	              SELECT id, conversation_id, role, content, tool_calls, created_at 
+	              FROM chat_messages 
+	              WHERE conversation_id = ? 
+	              ORDER BY created_at DESC
+	          ) ORDER BY created_at ASC`
 
 	rows, err := r.db.Query(query, conversationID)
 	if err != nil {
@@ -124,6 +130,79 @@ func (r *conversationRepository) GetFullConversationHistory(conversationID strin
 	}
 
 	return messages, nil
+}
+
+// GetConversations lists all conversations for a user.
+func (r *conversationRepository) GetConversations(userID string) ([]entity.Conversation, error) {
+	query := `SELECT id, user_id, title, created_at, updated_at 
+	          FROM chat_conversations 
+	          WHERE user_id = ? 
+	          ORDER BY updated_at DESC`
+
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("error querying conversations: %w", err)
+	}
+	defer rows.Close()
+
+	var conversations []entity.Conversation
+	for rows.Next() {
+		var conv entity.Conversation
+		err := rows.Scan(
+			&conv.ID,
+			&conv.UserID,
+			&conv.Title,
+			&conv.CreatedAt,
+			&conv.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning conversation: %w", err)
+		}
+		conversations = append(conversations, conv)
+	}
+
+	return conversations, nil
+}
+
+// GetConversationByID fetches a conversation by ID, ensuring it belongs to the user.
+func (r *conversationRepository) GetConversationByID(id string, userID string) (*entity.Conversation, error) {
+	query := `SELECT id, user_id, title, created_at, updated_at 
+	          FROM chat_conversations 
+	          WHERE id = ? AND user_id = ?`
+
+	var conv entity.Conversation
+	err := r.db.QueryRow(query, id, userID).Scan(
+		&conv.ID,
+		&conv.UserID,
+		&conv.Title,
+		&conv.CreatedAt,
+		&conv.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("error getting conversation by id: %w", err)
+	}
+
+	return &conv, nil
+}
+
+// DeleteConversation removes a conversation and its messages (via cascade).
+func (r *conversationRepository) DeleteConversation(id string, userID string) error {
+	query := `DELETE FROM chat_conversations WHERE id = ? AND user_id = ?`
+	res, err := r.db.Exec(query, id, userID)
+	if err != nil {
+		return fmt.Errorf("error deleting conversation: %w", err)
+	}
+
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("conversation not found or not owned by user")
+	}
+
+	return nil
 }
 
 // SaveMessage persists a new message and updates the conversation timestamp.

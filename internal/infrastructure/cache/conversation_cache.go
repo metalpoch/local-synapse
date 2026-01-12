@@ -16,9 +16,9 @@ const (
 )
 
 type ConversationCache interface {
-	GetConversationFromCache(ctx context.Context, userID string) ([]dto.OllamaChatMessage, error)
-	SaveConversationToCache(ctx context.Context, userID string, messages []dto.OllamaChatMessage) error
-	InvalidateConversation(ctx context.Context, userID string) error
+	GetConversationFromCache(ctx context.Context, conversationID string) ([]dto.OllamaChatMessage, error)
+	SaveConversationToCache(ctx context.Context, conversationID string, messages []dto.OllamaChatMessage) error
+	InvalidateConversation(ctx context.Context, conversationID string) error
 }
 
 type conversationCache struct {
@@ -30,12 +30,12 @@ func NewConversationCache(client valkey.Client) ConversationCache {
 }
 
 // GetConversationFromCache retrieves the conversation history from the Valkey storage.
-func (c *conversationCache) GetConversationFromCache(ctx context.Context, userID string) ([]dto.OllamaChatMessage, error) {
+func (c *conversationCache) GetConversationFromCache(ctx context.Context, conversationID string) ([]dto.OllamaChatMessage, error) {
 	if c.client == nil {
 		return nil, fmt.Errorf("valkey client is nil")
 	}
 
-	key := conversationKeyPrefix + userID
+	key := conversationKeyPrefix + conversationID
 	cmd := c.client.B().Get().Key(key).Build()
 	result := c.client.Do(ctx, cmd)
 
@@ -53,7 +53,7 @@ func (c *conversationCache) GetConversationFromCache(ctx context.Context, userID
 }
 
 // SaveConversationToCache stores the conversation history with a TTL.
-func (c *conversationCache) SaveConversationToCache(ctx context.Context, userID string, messages []dto.OllamaChatMessage) error {
+func (c *conversationCache) SaveConversationToCache(ctx context.Context, conversationID string, messages []dto.OllamaChatMessage) error {
 	if c.client == nil {
 		return fmt.Errorf("valkey client is nil")
 	}
@@ -63,7 +63,7 @@ func (c *conversationCache) SaveConversationToCache(ctx context.Context, userID 
 		return fmt.Errorf("error marshaling conversation: %w", err)
 	}
 
-	key := conversationKeyPrefix + userID
+	key := conversationKeyPrefix + conversationID
 	cmd := c.client.B().Set().Key(key).Value(string(data)).Ex(conversationTTL).Build()
 	result := c.client.Do(ctx, cmd)
 
@@ -75,12 +75,12 @@ func (c *conversationCache) SaveConversationToCache(ctx context.Context, userID 
 }
 
 // InvalidateConversation removes the conversation record from the cache.
-func (c *conversationCache) InvalidateConversation(ctx context.Context, userID string) error {
+func (c *conversationCache) InvalidateConversation(ctx context.Context, conversationID string) error {
 	if c.client == nil {
 		return fmt.Errorf("valkey client is nil")
 	}
 
-	key := conversationKeyPrefix + userID
+	key := conversationKeyPrefix + conversationID
 	cmd := c.client.B().Del().Key(key).Build()
 	result := c.client.Do(ctx, cmd)
 
