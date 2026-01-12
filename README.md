@@ -95,7 +95,9 @@ Esto levantará el contenedor `go-local-synapse-proxy` exponiendo el puerto 8080
 ¡Tu API ahora es inteligente! No necesitas software extra. El contenedor ya incluye todo lo necesario para orquestar herramientas.
 
 ### Usuarios y Sesión
-- **Validar Sesión**: `GET /api/v1/auth/me` (Requiere JWT). Retorna los datos del usuario actual.
+- **Validar Sesión**: `GET /api/v1/auth/me` (Requiere JWT).
+- **Cierre de Sesión**: `POST /api/v1/auth/logout` (Requiere JWT). Invalida el acceso actual.
+- **Refrescar Token**: `POST /api/v1/auth/refresh`. Permite obtener un nuevo par de tokens usando un Refresh Token.
 - **Login**: `POST /api/v1/auth/login`.
 - **Registro**: `POST /api/v1/auth/register`.
 
