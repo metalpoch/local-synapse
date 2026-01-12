@@ -36,4 +36,5 @@ func SetupOllamaRouter(
 	router.GET("/conversations", h.ListConversations)
 	router.POST("/conversations", h.CreateConversation)
 	router.DELETE("/conversations/:id", h.DeleteConversation)
+	router.PUT("/conversations/:id/title", h.RenameConversation)
 }

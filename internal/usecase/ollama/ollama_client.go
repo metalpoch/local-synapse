@@ -69,3 +69,49 @@ func (c *OllamaClient) StreamChatRequest(
 
 	return nil
 }
+// GenerateTitle sends a prompt to Ollama to generate a short title for a conversation
+func (c *OllamaClient) GenerateTitle(ctx context.Context, userPrompt string) (string, error) {
+	request := dto.OllamaChatRequest{
+		Model: "llama3", // O el modelo configurado por defecto
+		Messages: []dto.OllamaChatMessage{
+			{
+				Role:    "system",
+				Content: "You are a title generator. Generate a 3-5 word title in Spanish for the user's message. Reply ONLY with the title without any symbols, quotes or extra text.",
+			},
+			{
+				Role:    "user",
+				Content: userPrompt,
+			},
+		},
+		Stream: false,
+	}
+
+	body, err := json.Marshal(request)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/chat", bytes.NewBuffer(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	return result.Message.Content, nil
+}

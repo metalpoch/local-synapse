@@ -17,6 +17,7 @@ type ConversationRepository interface {
 	DeleteConversation(id string, userID string) error
 	SaveMessage(message *entity.Message) error
 	CreateConversation(userID string) (*entity.Conversation, error)
+	UpdateConversation(id string, userID string, title string) error
 }
 
 type conversationRepository struct {
@@ -271,4 +272,20 @@ func (r *conversationRepository) getConversationByID(id string) (*entity.Convers
 	}
 
 	return &conv, nil
+}
+
+// UpdateConversation updates the title of a specific conversation.
+func (r *conversationRepository) UpdateConversation(id string, userID string, title string) error {
+	query := `UPDATE chat_conversations SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`
+	res, err := r.db.Exec(query, title, id, userID)
+	if err != nil {
+		return fmt.Errorf("error updating conversation: %w", err)
+	}
+
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("conversation not found or not owned by user")
+	}
+
+	return nil
 }

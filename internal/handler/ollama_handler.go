@@ -21,6 +21,7 @@ type ollamaHandler struct {
 	listConvUC    *ollama.ListConversations
 	createConvUC  *ollama.CreateConversation
 	deleteConvUC  *ollama.DeleteConversation
+	renameConvUC  *ollama.RenameConversation
 	getUser      *user.GetUser
 }
 
@@ -44,6 +45,7 @@ func NewOllamaHandler(
 		ollama.NewListConversations(conversationRepo),
 		ollama.NewCreateConversation(conversationRepo),
 		ollama.NewDeleteConversation(conversationRepo),
+		ollama.NewRenameConversation(conversationRepo),
 		gu,
 	}
 }
@@ -179,4 +181,35 @@ func (h *ollamaHandler) DeleteConversation(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, echo.Map{"message": "conversation deleted successfully"})
+}
+
+func (h *ollamaHandler) RenameConversation(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
+	}
+
+	id := c.Param("id")
+	if id == "" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "missing conversation id"})
+	}
+
+	var input struct {
+		Title string `json:"title"`
+	}
+	if err := c.Bind(&input); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid request body"})
+	}
+
+	if input.Title == "" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "title is required"})
+	}
+
+	ctx := c.Request().Context()
+	err := h.renameConvUC.Execute(ctx, id, userID, input.Title)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{"message": "conversation renamed successfully"})
 }
