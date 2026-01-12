@@ -54,10 +54,13 @@ func (r *conversationRepository) GetOrCreateActiveConversation(userID string) (*
 // GetConversationMessages retrieves the last N messages from a specific conversation.
 func (r *conversationRepository) GetConversationMessages(conversationID string, limit int) ([]entity.Message, error) {
 	query := `SELECT id, conversation_id, role, content, tool_calls, created_at 
-	          FROM chat_messages 
-	          WHERE conversation_id = ? 
-	          ORDER BY created_at ASC 
-	          LIMIT ?`
+	          FROM (
+	              SELECT id, conversation_id, role, content, tool_calls, created_at 
+	              FROM chat_messages 
+	              WHERE conversation_id = ? 
+	              ORDER BY created_at DESC 
+	              LIMIT ?
+	          ) ORDER BY created_at ASC`
 
 	rows, err := r.db.Query(query, conversationID, limit)
 	if err != nil {

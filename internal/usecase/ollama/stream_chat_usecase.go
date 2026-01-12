@@ -158,11 +158,20 @@ func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserRespo
 			}
 			return onChunk(chunk)
 		})
-		
 		if err != nil {
 			return err
 		}
 	}
+
+	// Add the final assistant response to the messages for caching
+	finalAssistantMsg := dto.OllamaChatMessage{
+		Role:    "assistant",
+		Content: fullContent,
+	}
+	if len(allToolCalls) > 0 {
+		finalAssistantMsg.ToolCalls = allToolCalls
+	}
+	messages = append(messages, finalAssistantMsg)
 
 	// Persist the conversation context asynchronously
 	go uc.saveConversationContext(context.Background(), conversation.ID, user.ID, userPrompt, fullContent, allToolCalls, messages)
