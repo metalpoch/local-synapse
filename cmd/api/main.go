@@ -65,6 +65,8 @@ func main() {
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
 
+	e.Static("/assets", "public/assets")
+
 	// Global authentication manager
 	authManager := authentication.NewAuthManager([]byte(jwtSecret), vlk, accessTokenTTL, refreshToken)
 

@@ -31,3 +31,7 @@ type Tokens struct {
 type RefreshTokenRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
+
+type UpdateProfileRequest struct {
+	Name string `form:"name"`
+}

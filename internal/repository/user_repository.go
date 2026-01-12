@@ -13,6 +13,7 @@ type UserRepository interface {
 	Register(ctx context.Context, user entity.User) (string, error)
 	Login(ctx context.Context, email string) (entity.User, error)
 	GetByID(ctx context.Context, id string) (dto.UserResponse, error)
+	Update(ctx context.Context, id string, name string, imageURL string) error
 }
 
 type userRepo struct {
@@ -66,4 +67,26 @@ func (repo *userRepo) Login(ctx context.Context, email string) (entity.User, err
 	err := repo.db.QueryRowContext(ctx, query, email).Scan(&user.ID, &user.Name, &user.Email, &user.ImageURL, &user.Password, &user.AuthProvider)
 
 	return user, err
+}
+
+// Update modifies user's name and image_url.
+func (repo *userRepo) Update(ctx context.Context, id string, name string, imageURL string) error {
+	var query string
+	var args []any
+
+	if name != "" && imageURL != "" {
+		query = "UPDATE users SET name = ?, image_url = ? WHERE id = ?"
+		args = append(args, name, imageURL, id)
+	} else if name != "" {
+		query = "UPDATE users SET name = ? WHERE id = ?"
+		args = append(args, name, id)
+	} else if imageURL != "" {
+		query = "UPDATE users SET image_url = ? WHERE id = ?"
+		args = append(args, imageURL, id)
+	} else {
+		return nil
+	}
+
+	_, err := repo.db.ExecContext(ctx, query, args...)
+	return err
 }

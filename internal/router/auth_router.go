@@ -17,13 +17,17 @@ func SetupAuthRouter(e *echo.Echo, am authentication.AuthManager, ur repository.
 		user.NewGetUser(ur),
 		auth.NewUserLogout(am),
 		auth.NewRefreshToken(am),
+		user.NewUpdateUser(ur),
 	)
 
-	router := e.Group("/api/v1/auth")
-	router.POST("/login", h.Login)
-	router.POST("/register", h.Register)
-	router.GET("/me", h.Me, middleware.AuthMiddleware(am))
-	router.POST("/logout", h.Logout, middleware.AuthMiddleware(am))
-	router.POST("/refresh", h.Refresh)
+	authRouter := e.Group("/api/v1/auth")
+	authRouter.POST("/login", h.Login)
+	authRouter.POST("/register", h.Register)
+	authRouter.POST("/refresh", h.Refresh)
+	authRouter.GET("/me", h.Me, middleware.AuthMiddleware(am))
+	authRouter.POST("/logout", h.Logout, middleware.AuthMiddleware(am))
+
+	userRouter := e.Group("/api/v1/user", middleware.AuthMiddleware(am))
+	userRouter.PUT("/profile", h.UpdateProfile)
 }
 

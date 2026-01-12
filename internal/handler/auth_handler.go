@@ -16,6 +16,7 @@ type authHandler struct {
 	getUser      *user.GetUser
 	userLogout   *auth.UserLogout
 	refreshToken *auth.RefreshToken
+	updateUser   *user.UpdateUser
 }
 
 func NewAuthHandler(
@@ -24,8 +25,9 @@ func NewAuthHandler(
 	gu *user.GetUser,
 	ulo *auth.UserLogout,
 	rt *auth.RefreshToken,
+	uu *user.UpdateUser,
 ) *authHandler {
-	return &authHandler{ul, ur, gu, ulo, rt}
+	return &authHandler{ul, ur, gu, ulo, rt, uu}
 }
 
 func (h *authHandler) Register(c echo.Context) error {
@@ -102,5 +104,26 @@ func (h *authHandler) Refresh(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, tokens)
+}
+
+func (h *authHandler) UpdateProfile(c echo.Context) error {
+	userID, ok := middleware.GetUserID(c)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
+	}
+
+	var input dto.UpdateProfileRequest
+	if err := c.Bind(&input); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid form data"})
+	}
+
+	file, _ := c.FormFile("image")
+
+	err := h.updateUser.Execute(c.Request().Context(), userID, input.Name, file)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{"message": "profile updated successfully"})
 }
 
