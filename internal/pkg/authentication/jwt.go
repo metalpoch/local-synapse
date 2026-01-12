@@ -29,17 +29,17 @@ var (
 var luaReplaceSession = valkey.NewLuaScript(`
 local userKey   = KEYS[1]
 local newRTKey  = KEYS[2]
-local newRT     = ARGV[1]
-local userID    = ARGV[2]
-local ttl       = ARGV[3]
-local oldHash   = ARGV[4]
+local userID    = ARGV[1]
+local ttl       = ARGV[2]
+local newRTHash = ARGV[3]
 
-if oldHash and oldHash ~= "" then
-    redis.call("DEL", "auth:rt:" .. oldHash)
+local oldRTHash = redis.call("GET", userKey)
+if oldRTHash then
+    redis.call("DEL", "auth:rt:" .. oldRTHash)
 end
-redis.call("DEL", userKey)
+
 redis.call("SET", newRTKey, userID, "EX", ttl)
-redis.call("SET", userKey, newRT, "EX", ttl)
+redis.call("SET", userKey, newRTHash, "EX", ttl)
 return 1
 `)
 
@@ -47,16 +47,16 @@ var refreshCheck = valkey.NewLuaScript(`
 -- refresh_check.lua
 local oldRTKey = KEYS[1]
 local userKey  = KEYS[2]
-local oldRT    = ARGV[1]
+local oldRTHash = ARGV[1]
 
 local userID = redis.call("GET", oldRTKey)
 if not userID then
     return -1  -- ErrInvalidRefreshToken
 end
 
-local current = redis.call("GET", userKey)
-if current ~= oldRT then
-    -- Detectamos intento de reúso: limpiamos la sesión por seguridad
+local currentHash = redis.call("GET", userKey)
+if currentHash ~= oldRTHash then
+    -- Detectamos intento de reúso o sesión invalidada: limpiamos la sesión por seguridad
     redis.call("DEL", userKey) 
     return -2  -- ErrTokenRevoked
 end
@@ -99,16 +99,12 @@ func (a *authManager) GenerateTokens(ctx context.Context, userID string) (string
 	userKey := a.userSessionKey(userID)
 	ttlSec := int64(a.refreshTokenTTL.Seconds())
 
-	var oldRTHash string
-	oldRTPlain, err := a.cache.Do(ctx, a.cache.B().Get().Key(userKey).Build()).ToString()
-	if err == nil && oldRTPlain != "" {
-		h := sha256.Sum256([]byte(oldRTPlain))
-		oldRTHash = hex.EncodeToString(h[:])
-	}
+	h := sha256.Sum256([]byte(newRT))
+	newRTHash := hex.EncodeToString(h[:])
 
 	if err := luaReplaceSession.Exec(ctx, a.cache,
 		[]string{userKey, newRTKey},
-		[]string{newRT, userID, strconv.FormatInt(ttlSec, 10), oldRTHash},
+		[]string{userID, strconv.FormatInt(ttlSec, 10), newRTHash},
 	).Error(); err != nil {
 		return "", "", fmt.Errorf("%w: lua execution failed: %v", ErrTokenGeneration, err)
 	}
@@ -145,10 +141,13 @@ func (a *authManager) RefreshToken(ctx context.Context, oldRefreshToken string) 
 	}
 	userKey := a.userSessionKey(userID)
 
+	h := sha256.Sum256([]byte(oldRefreshToken))
+	oldRTHash := hex.EncodeToString(h[:])
+
 	// el script devuelve el userID o nil/-1/-2
 	ret, err := refreshCheck.Exec(ctx, a.cache,
 		[]string{oldKey, userKey},
-		[]string{oldRefreshToken},
+		[]string{oldRTHash},
 	).ToString()
 
 	switch {
@@ -190,14 +189,19 @@ func (a *authManager) Logout(ctx context.Context, accessToken, refreshToken stri
 	}
 
 	userKey := a.userSessionKey(claims.Sub)
+	keysToDel := []string{userKey}
 
+	// Si no pasan el refresh token, buscamos el hash en la sesión para borrar la RT asociada
+	rtHash := ""
 	if refreshToken == "" {
-		refreshToken, _ = a.cache.Do(ctx, a.cache.B().Get().Key(userKey).Build()).ToString()
+		rtHash, _ = a.cache.Do(ctx, a.cache.B().Get().Key(userKey).Build()).ToString()
+	} else {
+		h := sha256.Sum256([]byte(refreshToken))
+		rtHash = hex.EncodeToString(h[:])
 	}
 
-	keysToDel := []string{userKey}
-	if refreshToken != "" {
-		keysToDel = append(keysToDel, a.refreshTokenKey(refreshToken))
+	if rtHash != "" {
+		keysToDel = append(keysToDel, "auth:rt:"+rtHash)
 	}
 
 	return a.cache.Do(ctx, a.cache.B().Del().Key(keysToDel...).Build()).Error()
