@@ -6,25 +6,24 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/metalpoch/local-synapse/internal/dto"
 	"github.com/metalpoch/local-synapse/internal/middleware"
-	"github.com/metalpoch/local-synapse/internal/usecase/auth"
 	"github.com/metalpoch/local-synapse/internal/usecase/user"
 )
 
 type authHandler struct {
-	userLogin    *auth.UserLogin
-	userRegister *auth.UserRegister
+	userLogin    *user.UserLogin
+	userRegister *user.UserRegister
 	getUser      *user.GetUser
-	userLogout   *auth.UserLogout
-	refreshToken *auth.RefreshToken
+	userLogout   *user.UserLogout
+	refreshToken *user.RefreshToken
 	updateUser   *user.UpdateUser
 }
 
 func NewAuthHandler(
-	ul *auth.UserLogin,
-	ur *auth.UserRegister,
+	ul *user.UserLogin,
+	ur *user.UserRegister,
 	gu *user.GetUser,
-	ulo *auth.UserLogout,
-	rt *auth.RefreshToken,
+	ulo *user.UserLogout,
+	rt *user.RefreshToken,
 	uu *user.UpdateUser,
 ) *authHandler {
 	return &authHandler{ul, ur, gu, ulo, rt, uu}
@@ -126,4 +125,3 @@ func (h *authHandler) UpdateProfile(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, echo.Map{"message": "profile updated successfully"})
 }
-

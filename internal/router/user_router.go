@@ -6,17 +6,16 @@ import (
 	"github.com/metalpoch/local-synapse/internal/middleware"
 	"github.com/metalpoch/local-synapse/internal/pkg/authentication"
 	"github.com/metalpoch/local-synapse/internal/repository"
-	"github.com/metalpoch/local-synapse/internal/usecase/auth"
 	"github.com/metalpoch/local-synapse/internal/usecase/user"
 )
 
 func SetupAuthRouter(e *echo.Echo, am authentication.AuthManager, ur repository.UserRepository) {
 	h := handler.NewAuthHandler(
-		auth.NewUserLogin(am, ur),
-		auth.NewUserRegister(am, ur),
+		user.NewUserLogin(am, ur),
+		user.NewUserRegister(am, ur),
 		user.NewGetUser(ur),
-		auth.NewUserLogout(am),
-		auth.NewRefreshToken(am),
+		user.NewUserLogout(am),
+		user.NewRefreshToken(am),
 		user.NewUpdateUser(ur),
 	)
 
@@ -28,6 +27,6 @@ func SetupAuthRouter(e *echo.Echo, am authentication.AuthManager, ur repository.
 	authRouter.POST("/logout", h.Logout, middleware.AuthMiddleware(am))
 
 	userRouter := e.Group("/api/v1/user", middleware.AuthMiddleware(am))
-	userRouter.PUT("/profile", h.UpdateProfile)
+	userRouter.PUT("/profile", h.UpdateProfile, middleware.AuthMiddleware(am))
 }
 
