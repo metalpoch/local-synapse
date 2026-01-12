@@ -86,6 +86,10 @@ podman-compose up -d
 
 Esto levantará el contenedor `go-local-synapse-proxy` exponiendo el puerto 8080 y configurando todas las variables de entorno necesarias desde tu archivo `.env`.
 
+> [!IMPORTANT]
+> Se creará automáticamente un directorio `./data` en tu host para persistir la base de datos SQLite. 
+> El volumen en `compose.yml` incluye el sufijo `:z` para asegurar la compatibilidad con **SELinux** (común en Fedora Server), lo cual permite que Podman aplique las etiquetas de seguridad correctas automáticamente.
+
 ## 🧠 Uso de la API (Nativo)
 
 ¡Tu API ahora es inteligente! No necesitas software extra. El contenedor ya incluye todo lo necesario para orquestar herramientas.
