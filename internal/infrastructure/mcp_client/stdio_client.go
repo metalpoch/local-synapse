@@ -54,7 +54,7 @@ func (c *stdioClient) ListTools(ctx context.Context) ([]mcp.Tool, error) {
 	return resp.Tools, nil
 }
 
-func (c *stdioClient) CallTool(ctx context.Context, name string, args map[string]interface{}) (*mcp.CallToolResult, error) {
+func (c *stdioClient) CallTool(ctx context.Context, name string, args map[string]any) (*mcp.CallToolResult, error) {
 	request := mcp.CallToolRequest{}
 	request.Params.Name = name
 	request.Params.Arguments = args
