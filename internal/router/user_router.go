@@ -29,4 +29,3 @@ func SetupAuthRouter(e *echo.Echo, am authentication.AuthManager, ur repository.
 	userRouter := e.Group("/api/v1/user", middleware.AuthMiddleware(am))
 	userRouter.PUT("/profile", h.UpdateProfile, middleware.AuthMiddleware(am))
 }
-

@@ -6,15 +6,21 @@ import (
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/metalpoch/local-synapse/internal/domain"
 )
+
+type MCPClient interface {
+	Initialize(ctx context.Context) error
+	ListTools(ctx context.Context) ([]mcp.Tool, error)
+	CallTool(ctx context.Context, name string, args map[string]any) (*mcp.CallToolResult, error)
+	Close() error
+}
 
 type stdioClient struct {
 	client client.MCPClient
 }
 
 // NewStdioClient creates a new MCP client that runs the given command
-func NewStdioClient(command string, args ...string) (domain.MCPClient, error) {
+func NewStdioClient(command string, args ...string) (MCPClient, error) {
 	// NewStdioMCPClient(command string, env []string, args ...string)
 	c, err := client.NewStdioMCPClient(command, nil, args...)
 	if err != nil {
@@ -58,7 +64,7 @@ func (c *stdioClient) CallTool(ctx context.Context, name string, args map[string
 	request := mcp.CallToolRequest{}
 	request.Params.Name = name
 	request.Params.Arguments = args
-	
+
 	resp, err := c.client.CallTool(ctx, request)
 	if err != nil {
 		return nil, err

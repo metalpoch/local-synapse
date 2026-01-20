@@ -6,9 +6,9 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/metalpoch/local-synapse/internal/domain"
 	"github.com/metalpoch/local-synapse/internal/dto"
 	"github.com/metalpoch/local-synapse/internal/infrastructure/cache"
+	mcpclient "github.com/metalpoch/local-synapse/internal/infrastructure/mcp_client"
 	"github.com/metalpoch/local-synapse/internal/middleware"
 	"github.com/metalpoch/local-synapse/internal/repository"
 	"github.com/metalpoch/local-synapse/internal/usecase/ollama"
@@ -18,16 +18,16 @@ import (
 type ollamaHandler struct {
 	streamChatUC *ollama.StreamChatUsecase
 	getHistoryUC *ollama.GetChatHistory
-	listConvUC    *ollama.ListConversations
-	createConvUC  *ollama.CreateConversation
-	deleteConvUC  *ollama.DeleteConversation
-	renameConvUC  *ollama.RenameConversation
+	listConvUC   *ollama.ListConversations
+	createConvUC *ollama.CreateConversation
+	deleteConvUC *ollama.DeleteConversation
+	renameConvUC *ollama.RenameConversation
 	getUser      *user.GetUser
 }
 
 func NewOllamaHandler(
 	url, model, systemPrompt string,
-	mcpClient domain.MCPClient,
+	mcpClient mcpclient.MCPClient,
 	gu *user.GetUser,
 	conversationRepo repository.ConversationRepository,
 	conversationCache cache.ConversationCache,

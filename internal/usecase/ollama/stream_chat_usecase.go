@@ -6,22 +6,22 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/metalpoch/local-synapse/internal/domain"
 	"github.com/metalpoch/local-synapse/internal/dto"
 	"github.com/metalpoch/local-synapse/internal/entity"
 	"github.com/metalpoch/local-synapse/internal/infrastructure/cache"
+	mcpclient "github.com/metalpoch/local-synapse/internal/infrastructure/mcp_client"
 	"github.com/metalpoch/local-synapse/internal/repository"
 )
 
 // StreamChatUsecase orchestrates the chat streaming flow with Ollama
 type StreamChatUsecase struct {
-	ollamaClient         *OllamaClient
-	toolExecutor         *ToolExecutor
-	mcpClient            domain.MCPClient
-	model                string
-	systemPrompt         string
-	conversationRepo     repository.ConversationRepository
-	conversationCache    cache.ConversationCache
+	ollamaClient      *OllamaClient
+	toolExecutor      *ToolExecutor
+	mcpClient         mcpclient.MCPClient
+	model             string
+	systemPrompt      string
+	conversationRepo  repository.ConversationRepository
+	conversationCache cache.ConversationCache
 }
 
 // NewStreamChatUsecase creates a new stream chat usecase
@@ -29,7 +29,7 @@ func NewStreamChatUsecase(
 	ollamaURL string,
 	model string,
 	systemPrompt string,
-	mcpClient domain.MCPClient,
+	mcpClient mcpclient.MCPClient,
 	conversationRepo repository.ConversationRepository,
 	conversationCache cache.ConversationCache,
 ) *StreamChatUsecase {
@@ -71,7 +71,7 @@ func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserRespo
 	// Try loading context from cache first
 	var messages []dto.OllamaChatMessage
 	cachedMessages, err := uc.conversationCache.GetConversationFromCache(ctx, conversation.ID)
-	
+
 	if err != nil || len(cachedMessages) == 0 {
 		log.Printf("[Context] Cache miss, loading from DB for conversation %s", conversation.ID)
 		dbMessages, err := uc.conversationRepo.GetConversationMessages(conversation.ID, 50)
@@ -86,7 +86,7 @@ func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserRespo
 	}
 
 	// Add user details to the system prompt to personalize the interaction
-	personalizedPrompt := fmt.Sprintf("%s\n\nActive user: %s (Email: %s)", 
+	personalizedPrompt := fmt.Sprintf("%s\n\nActive user: %s (Email: %s)",
 		uc.systemPrompt, user.Name, user.Email)
 
 	// Ensure the system prompt is always at the start
@@ -153,10 +153,10 @@ func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserRespo
 		messages = append(messages, toolMessages...)
 
 		log.Printf("[MCP] Sending final request with tool results")
-		
+
 		fullContent = ""
 		allToolCalls = nil
-		
+
 		finalRequest := dto.OllamaChatRequest{
 			Model:    uc.model,
 			Messages: messages,
@@ -229,23 +229,23 @@ func (uc *StreamChatUsecase) getAvailableTools(ctx context.Context) []dto.Tool {
 // convertMessagesToDTO maps persistence entities to communication DTOs
 func convertMessagesToDTO(dbMessages []entity.Message) []dto.OllamaChatMessage {
 	messages := make([]dto.OllamaChatMessage, 0, len(dbMessages))
-	
+
 	for _, msg := range dbMessages {
 		dtoMsg := dto.OllamaChatMessage{
 			Role:    msg.Role,
 			Content: msg.Content,
 		}
-		
+
 		if msg.ToolCalls != nil && *msg.ToolCalls != "" {
 			var toolCalls []dto.ToolCall
 			if err := json.Unmarshal([]byte(*msg.ToolCalls), &toolCalls); err == nil {
 				dtoMsg.ToolCalls = toolCalls
 			}
 		}
-		
+
 		messages = append(messages, dtoMsg)
 	}
-	
+
 	return messages
 }
 
@@ -277,18 +277,18 @@ func (uc *StreamChatUsecase) saveConversationContext(
 		Role:           "user",
 		Content:        userPrompt,
 	}
-	
+
 	if err := uc.conversationRepo.SaveMessage(userMsg); err != nil {
 		log.Printf("[Context] Error saving user message: %v", err)
 	}
-	
+
 	// Store assistant response
 	assistantMsg := &entity.Message{
 		ConversationID: conversation.ID,
 		Role:           "assistant",
 		Content:        assistantContent,
 	}
-	
+
 	if len(toolCalls) > 0 {
 		toolCallsJSON, err := json.Marshal(toolCalls)
 		if err == nil {
@@ -296,11 +296,11 @@ func (uc *StreamChatUsecase) saveConversationContext(
 			assistantMsg.ToolCalls = &toolCallsStr
 		}
 	}
-	
+
 	if err := uc.conversationRepo.SaveMessage(assistantMsg); err != nil {
 		log.Printf("[Context] Error saving assistant message: %v", err)
 	}
-	
+
 	// Update cache with the latest state
 	if err := uc.conversationCache.SaveConversationToCache(ctx, conversation.ID, allMessages); err != nil {
 		log.Printf("[Context] Error updating cache: %v", err)
@@ -308,4 +308,3 @@ func (uc *StreamChatUsecase) saveConversationContext(
 		log.Printf("[Context] Cache updated for conversation %s", conversation.ID)
 	}
 }
-

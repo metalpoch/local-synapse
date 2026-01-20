@@ -16,7 +16,7 @@ import (
 
 type UserRegister struct {
 	authManager authentication.AuthManager
-	userRepo repository.UserRepository
+	userRepo    repository.UserRepository
 }
 
 func NewUserRegister(am authentication.AuthManager, ur repository.UserRepository) *UserRegister {

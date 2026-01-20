@@ -7,17 +7,17 @@ import (
 	"log"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/metalpoch/local-synapse/internal/domain"
 	"github.com/metalpoch/local-synapse/internal/dto"
+	mcpclient "github.com/metalpoch/local-synapse/internal/infrastructure/mcp_client"
 )
 
 // ToolExecutor handles execution of MCP tool calls
 type ToolExecutor struct {
-	mcpClient domain.MCPClient
+	mcpClient mcpclient.MCPClient
 }
 
 // NewToolExecutor creates a new tool executor
-func NewToolExecutor(mcpClient domain.MCPClient) *ToolExecutor {
+func NewToolExecutor(mcpClient mcpclient.MCPClient) *ToolExecutor {
 	return &ToolExecutor{mcpClient: mcpClient}
 }
 

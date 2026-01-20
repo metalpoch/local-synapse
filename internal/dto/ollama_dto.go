@@ -11,7 +11,7 @@ type ToolCall struct {
 }
 
 type ToolCallFunction struct {
-	Name      string `json:"name"`
+	Name      string             `json:"name"`
 	Arguments ComponentArguments `json:"arguments"`
 }
 

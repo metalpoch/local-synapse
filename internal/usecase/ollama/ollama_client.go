@@ -69,6 +69,7 @@ func (c *OllamaClient) StreamChatRequest(
 
 	return nil
 }
+
 // GenerateTitle sends a prompt to Ollama to generate a short title for a conversation
 func (c *OllamaClient) GenerateTitle(ctx context.Context, userPrompt string) (string, error) {
 	request := dto.OllamaChatRequest{

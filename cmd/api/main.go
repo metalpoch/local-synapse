@@ -13,7 +13,6 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/valkey-io/valkey-go"
 
-	"github.com/metalpoch/local-synapse/internal/domain"
 	"github.com/metalpoch/local-synapse/internal/infrastructure/cache"
 	"github.com/metalpoch/local-synapse/internal/infrastructure/database"
 	mcpclient "github.com/metalpoch/local-synapse/internal/infrastructure/mcp_client"
@@ -34,7 +33,7 @@ var (
 	SqliteAddr         string
 	db                 *sql.DB
 	vlk                valkey.Client
-	mcpClient          domain.MCPClient
+	mcpClient          mcpclient.MCPClient
 	accessTokenTTL     time.Duration = 15 * time.Minute
 	refreshToken       time.Duration = 7 * 24 * time.Hour
 )
