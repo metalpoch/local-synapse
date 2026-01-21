@@ -92,11 +92,18 @@ func osmBoundary(query string) (string, error) {
 
 	u.RawQuery = params.Encode()
 
-	resp, err := http.Get(u.String())
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return "", fmt.Errorf("error creating request: %v", err)
+	}
+
+	req.Header.Set("User-Agent", "keiberup.dev")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
-
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
