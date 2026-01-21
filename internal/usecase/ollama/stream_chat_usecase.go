@@ -10,13 +10,16 @@ import (
 	"github.com/metalpoch/local-synapse/internal/entity"
 	"github.com/metalpoch/local-synapse/internal/infrastructure/cache"
 	mcpclient "github.com/metalpoch/local-synapse/internal/infrastructure/mcp_client"
+	"github.com/metalpoch/local-synapse/internal/infrastructure/ollama"
 	"github.com/metalpoch/local-synapse/internal/repository"
 )
 
+
 // StreamChatUsecase orchestrates the chat streaming flow with Ollama
 type StreamChatUsecase struct {
-	ollamaClient      *OllamaClient
+	ollamaClient      *ollama_infra.OllamaClient
 	toolExecutor      *ToolExecutor
+	generateTitleUC   *GenerateTitleUsecase
 	mcpClient         mcpclient.MCPClient
 	model             string
 	systemPrompt      string
@@ -34,8 +37,9 @@ func NewStreamChatUsecase(
 	conversationCache cache.ConversationCache,
 ) *StreamChatUsecase {
 	return &StreamChatUsecase{
-		ollamaClient:      NewOllamaClient(ollamaURL),
+		ollamaClient:      ollama_infra.NewOllamaClient(ollamaURL),
 		toolExecutor:      NewToolExecutor(mcpClient),
+		generateTitleUC:   NewGenerateTitleUsecase(ollamaURL, model),
 		mcpClient:         mcpClient,
 		model:             model,
 		systemPrompt:      systemPrompt,
@@ -44,8 +48,8 @@ func NewStreamChatUsecase(
 	}
 }
 
-// StreamChat handles the full chat flow with Ollama, including tool calling and persistence.
-func (uc *StreamChatUsecase) StreamChat(ctx context.Context, user *dto.UserResponse, conversationID, userPrompt string, onChunk func(dto.OllamaChatResponse) error) error {
+// Execute handles the full chat flow with Ollama, including tool calling and persistence.
+func (uc *StreamChatUsecase) Execute(ctx context.Context, user *dto.UserResponse, conversationID, userPrompt string, onChunk func(dto.OllamaChatResponse) error) error {
 	tools := uc.getAvailableTools(ctx)
 
 	var conversation *entity.Conversation
@@ -261,7 +265,7 @@ func (uc *StreamChatUsecase) saveConversationContext(
 ) {
 	// Generate title if it doesn't exist
 	if conversation.Title == nil || *conversation.Title == "" {
-		title, err := uc.ollamaClient.GenerateTitle(ctx, userPrompt)
+		title, err := uc.generateTitleUC.Execute(ctx, userPrompt)
 		if err == nil && title != "" {
 			if err := uc.conversationRepo.UpdateConversation(conversation.ID, userID, title); err != nil {
 				log.Printf("[Context] Error updating conversation title: %v", err)

@@ -8,6 +8,7 @@ import (
 	"github.com/metalpoch/local-synapse/internal/middleware"
 	"github.com/metalpoch/local-synapse/internal/pkg/authentication"
 	"github.com/metalpoch/local-synapse/internal/repository"
+	"github.com/metalpoch/local-synapse/internal/usecase/ollama"
 	"github.com/metalpoch/local-synapse/internal/usecase/user"
 )
 
@@ -21,13 +22,13 @@ func SetupOllamaRouter(
 	cc cache.ConversationCache,
 ) {
 	h := handler.NewOllamaHandler(
-		ollamaUrl,
-		model,
-		systemPrompt,
-		mcpClient,
+		ollama.NewStreamChatUsecase(ollamaUrl, model, systemPrompt, mcpClient, cr, cc),
+		ollama.NewGetChatHistory(cr),
+		ollama.NewListConversations(cr),
+		ollama.NewCreateConversation(cr),
+		ollama.NewDeleteConversation(cr),
+		ollama.NewRenameConversation(cr),
 		user.NewGetUser(ur),
-		cr,
-		cc,
 	)
 
 	router := e.Group("/api/v1/ollama", middleware.AuthMiddleware(am))

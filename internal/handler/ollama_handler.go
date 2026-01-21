@@ -7,16 +7,13 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/metalpoch/local-synapse/internal/dto"
-	"github.com/metalpoch/local-synapse/internal/infrastructure/cache"
-	mcpclient "github.com/metalpoch/local-synapse/internal/infrastructure/mcp_client"
 	"github.com/metalpoch/local-synapse/internal/middleware"
-	"github.com/metalpoch/local-synapse/internal/repository"
 	"github.com/metalpoch/local-synapse/internal/usecase/ollama"
 	"github.com/metalpoch/local-synapse/internal/usecase/user"
 )
 
 type ollamaHandler struct {
-	streamChatUC *ollama.StreamChatUsecase
+	chatUC       *ollama.StreamChatUsecase
 	getHistoryUC *ollama.GetChatHistory
 	listConvUC   *ollama.ListConversations
 	createConvUC *ollama.CreateConversation
@@ -26,26 +23,21 @@ type ollamaHandler struct {
 }
 
 func NewOllamaHandler(
-	url, model, systemPrompt string,
-	mcpClient mcpclient.MCPClient,
+	chatUC *ollama.StreamChatUsecase,
+	historyUC *ollama.GetChatHistory,
+	listUC *ollama.ListConversations,
+	createUC *ollama.CreateConversation,
+	deleteUC *ollama.DeleteConversation,
+	renameUC *ollama.RenameConversation,
 	gu *user.GetUser,
-	conversationRepo repository.ConversationRepository,
-	conversationCache cache.ConversationCache,
 ) *ollamaHandler {
 	return &ollamaHandler{
-		ollama.NewStreamChatUsecase(
-			url,
-			model,
-			systemPrompt,
-			mcpClient,
-			conversationRepo,
-			conversationCache,
-		),
-		ollama.NewGetChatHistory(conversationRepo),
-		ollama.NewListConversations(conversationRepo),
-		ollama.NewCreateConversation(conversationRepo),
-		ollama.NewDeleteConversation(conversationRepo),
-		ollama.NewRenameConversation(conversationRepo),
+		chatUC,
+		historyUC,
+		listUC,
+		createUC,
+		deleteUC,
+		renameUC,
 		gu,
 	}
 }
@@ -114,7 +106,7 @@ func (h *ollamaHandler) Stream(c echo.Context) error {
 
 	convID := c.QueryParam("conversation_id")
 
-	return h.streamChatUC.StreamChat(ctx, user, convID, userPrompt, onChunk)
+	return h.chatUC.Execute(ctx, user, convID, userPrompt, onChunk)
 }
 
 func (h *ollamaHandler) History(c echo.Context) error {

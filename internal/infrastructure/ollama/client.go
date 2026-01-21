@@ -1,4 +1,4 @@
-package ollama
+package ollama_infra
 
 import (
 	"bufio"
@@ -28,6 +28,7 @@ func (c *OllamaClient) StreamChatRequest(
 	request dto.OllamaChatRequest,
 	onChunk func(dto.OllamaChatResponse) error,
 ) error {
+	request.Stream = true
 	body, err := json.Marshal(request)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
@@ -70,49 +71,34 @@ func (c *OllamaClient) StreamChatRequest(
 	return nil
 }
 
-// GenerateTitle sends a prompt to Ollama to generate a short title for a conversation
-func (c *OllamaClient) GenerateTitle(ctx context.Context, userPrompt string) (string, error) {
-	request := dto.OllamaChatRequest{
-		Model: "llama3", // O el modelo configurado por defecto
-		Messages: []dto.OllamaChatMessage{
-			{
-				Role:    "system",
-				Content: "You are a title generator. Generate a 3-5 word title in Spanish for the user's message. Reply ONLY with the title without any symbols, quotes or extra text.",
-			},
-			{
-				Role:    "user",
-				Content: userPrompt,
-			},
-		},
-		Stream: false,
-	}
-
+// ChatRequest sends a non-streaming chat request to Ollama
+func (c *OllamaClient) ChatRequest(ctx context.Context, request dto.OllamaChatRequest) (*dto.OllamaChatResponse, error) {
+	request.Stream = false
 	body, err := json.Marshal(request)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/chat", bytes.NewBuffer(body))
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	var result struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ollama returned status %d", resp.StatusCode)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
+	var chatResp dto.OllamaChatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return result.Message.Content, nil
+	return &chatResp, nil
 }
