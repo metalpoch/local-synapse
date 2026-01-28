@@ -2,29 +2,20 @@ package ollama
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log"
 
 	"github.com/metalpoch/local-synapse/internal/dto"
-	"github.com/metalpoch/local-synapse/internal/entity"
-	"github.com/metalpoch/local-synapse/internal/infrastructure/cache"
 	mcpclient "github.com/metalpoch/local-synapse/internal/infrastructure/mcp_client"
 	"github.com/metalpoch/local-synapse/internal/infrastructure/ollama"
-	"github.com/metalpoch/local-synapse/internal/repository"
 )
-
 
 // StreamChatUsecase orchestrates the chat streaming flow with Ollama
 type StreamChatUsecase struct {
-	ollamaClient      *ollama_infra.OllamaClient
-	toolExecutor      *ToolExecutor
-	generateTitleUC   *GenerateTitleUsecase
-	mcpClient         mcpclient.MCPClient
-	model             string
-	systemPrompt      string
-	conversationRepo  repository.ConversationRepository
-	conversationCache cache.ConversationCache
+	ollamaClient *ollama_infra.OllamaClient
+	toolExecutor *ToolExecutor
+	mcpClient    mcpclient.MCPClient
+	model        string
+	systemPrompt string
 }
 
 // NewStreamChatUsecase creates a new stream chat usecase
@@ -33,86 +24,24 @@ func NewStreamChatUsecase(
 	model string,
 	systemPrompt string,
 	mcpClient mcpclient.MCPClient,
-	conversationRepo repository.ConversationRepository,
-	conversationCache cache.ConversationCache,
 ) *StreamChatUsecase {
 	return &StreamChatUsecase{
-		ollamaClient:      ollama_infra.NewOllamaClient(ollamaURL),
-		toolExecutor:      NewToolExecutor(mcpClient),
-		generateTitleUC:   NewGenerateTitleUsecase(ollamaURL, model),
-		mcpClient:         mcpClient,
-		model:             model,
-		systemPrompt:      systemPrompt,
-		conversationRepo:  conversationRepo,
-		conversationCache: conversationCache,
+		ollamaClient: ollama_infra.NewOllamaClient(ollamaURL),
+		toolExecutor: NewToolExecutor(mcpClient),
+		mcpClient:    mcpClient,
+		model:        model,
+		systemPrompt: systemPrompt,
 	}
 }
 
 // Execute handles the full chat flow with Ollama, including tool calling and persistence.
-func (uc *StreamChatUsecase) Execute(ctx context.Context, user *dto.UserResponse, conversationID, userPrompt string, onChunk func(dto.OllamaChatResponse) error) error {
+func (uc *StreamChatUsecase) Execute(ctx context.Context, userPrompt string, onChunk func(dto.OllamaChatResponse) error) error {
 	tools := uc.getAvailableTools(ctx)
 
-	var conversation *entity.Conversation
-	var err error
-
-	if conversationID != "" {
-		conversation, err = uc.conversationRepo.GetConversationByID(conversationID, user.ID)
-		if err != nil {
-			return fmt.Errorf("failed to get conversation: %w", err)
-		}
-		if conversation == nil {
-			return fmt.Errorf("conversation not found or not owned by user")
-		}
-	} else {
-		// Fetch or start a new conversation for the user
-		conversation, err = uc.conversationRepo.GetOrCreateActiveConversation(user.ID)
-		if err != nil {
-			log.Printf("[Context] Error getting/creating conversation: %v", err)
-			return fmt.Errorf("failed to get conversation: %w", err)
-		}
+	var messages []dto.OllamaChatMessage = []dto.OllamaChatMessage{
+		{Role: "system", Content: uc.systemPrompt},
+		{Role: "user", Content: userPrompt},
 	}
-
-	// Try loading context from cache first
-	var messages []dto.OllamaChatMessage
-	cachedMessages, err := uc.conversationCache.GetConversationFromCache(ctx, conversation.ID)
-
-	if err != nil || len(cachedMessages) == 0 {
-		log.Printf("[Context] Cache miss, loading from DB for conversation %s", conversation.ID)
-		dbMessages, err := uc.conversationRepo.GetConversationMessages(conversation.ID, 50)
-		if err != nil {
-			log.Printf("[Context] Error loading messages from DB: %v", err)
-		} else {
-			messages = convertMessagesToDTO(dbMessages)
-		}
-	} else {
-		log.Printf("[Context] Cache hit, loaded %d messages for conversation %s", len(cachedMessages), conversation.ID)
-		messages = cachedMessages
-	}
-
-	// Add user details to the system prompt to personalize the interaction
-	personalizedPrompt := fmt.Sprintf("%s\n\nActive user: %s (Email: %s)",
-		uc.systemPrompt, user.Name, user.Email)
-
-	// Ensure the system prompt is always at the start
-	if len(messages) == 0 {
-		messages = []dto.OllamaChatMessage{
-			{Role: "system", Content: personalizedPrompt},
-		}
-	} else {
-		if messages[0].Role == "system" {
-			messages[0].Content = personalizedPrompt
-		} else {
-			messages = append([]dto.OllamaChatMessage{
-				{Role: "system", Content: personalizedPrompt},
-			}, messages...)
-		}
-	}
-
-	// Add the new user message to the stack
-	messages = append(messages, dto.OllamaChatMessage{
-		Role:    "user",
-		Content: userPrompt,
-	})
 
 	log.Printf("[MCP] Sending initial request to Ollama (Streaming mode)")
 
@@ -127,7 +56,7 @@ func (uc *StreamChatUsecase) Execute(ctx context.Context, user *dto.UserResponse
 	}
 
 	// Stream the first response and gather chunks
-	err = uc.ollamaClient.StreamChatRequest(ctx, request, func(chunk dto.OllamaChatResponse) error {
+	err := uc.ollamaClient.StreamChatRequest(ctx, request, func(chunk dto.OllamaChatResponse) error {
 		fullContent += chunk.Message.Content
 		if len(chunk.Message.ToolCalls) > 0 {
 			allToolCalls = append(allToolCalls, chunk.Message.ToolCalls...)
@@ -190,9 +119,6 @@ func (uc *StreamChatUsecase) Execute(ctx context.Context, user *dto.UserResponse
 	}
 	messages = append(messages, finalAssistantMsg)
 
-	// Persist the conversation context asynchronously
-	go uc.saveConversationContext(context.Background(), conversation, user.ID, userPrompt, fullContent, allToolCalls, messages)
-
 	return nil
 }
 
@@ -228,87 +154,4 @@ func (uc *StreamChatUsecase) getAvailableTools(ctx context.Context) []dto.Tool {
 	}
 
 	return tools
-}
-
-// convertMessagesToDTO maps persistence entities to communication DTOs
-func convertMessagesToDTO(dbMessages []entity.Message) []dto.OllamaChatMessage {
-	messages := make([]dto.OllamaChatMessage, 0, len(dbMessages))
-
-	for _, msg := range dbMessages {
-		dtoMsg := dto.OllamaChatMessage{
-			Role:    msg.Role,
-			Content: msg.Content,
-		}
-
-		if msg.ToolCalls != nil && *msg.ToolCalls != "" {
-			var toolCalls []dto.ToolCall
-			if err := json.Unmarshal([]byte(*msg.ToolCalls), &toolCalls); err == nil {
-				dtoMsg.ToolCalls = toolCalls
-			}
-		}
-
-		messages = append(messages, dtoMsg)
-	}
-
-	return messages
-}
-
-// saveConversationContext persists the chat session to both the database and cache
-func (uc *StreamChatUsecase) saveConversationContext(
-	ctx context.Context,
-	conversation *entity.Conversation,
-	userID string,
-	userPrompt string,
-	assistantContent string,
-	toolCalls []dto.ToolCall,
-	allMessages []dto.OllamaChatMessage,
-) {
-	// Generate title if it doesn't exist
-	if conversation.Title == nil || *conversation.Title == "" {
-		title, err := uc.generateTitleUC.Execute(ctx, userPrompt)
-		if err == nil && title != "" {
-			if err := uc.conversationRepo.UpdateConversation(conversation.ID, userID, title); err != nil {
-				log.Printf("[Context] Error updating conversation title: %v", err)
-			} else {
-				log.Printf("[Context] Generated title for conversation %s: %s", conversation.ID, title)
-			}
-		}
-	}
-
-	// Store user input
-	userMsg := &entity.Message{
-		ConversationID: conversation.ID,
-		Role:           "user",
-		Content:        userPrompt,
-	}
-
-	if err := uc.conversationRepo.SaveMessage(userMsg); err != nil {
-		log.Printf("[Context] Error saving user message: %v", err)
-	}
-
-	// Store assistant response
-	assistantMsg := &entity.Message{
-		ConversationID: conversation.ID,
-		Role:           "assistant",
-		Content:        assistantContent,
-	}
-
-	if len(toolCalls) > 0 {
-		toolCallsJSON, err := json.Marshal(toolCalls)
-		if err == nil {
-			toolCallsStr := string(toolCallsJSON)
-			assistantMsg.ToolCalls = &toolCallsStr
-		}
-	}
-
-	if err := uc.conversationRepo.SaveMessage(assistantMsg); err != nil {
-		log.Printf("[Context] Error saving assistant message: %v", err)
-	}
-
-	// Update cache with the latest state
-	if err := uc.conversationCache.SaveConversationToCache(ctx, conversation.ID, allMessages); err != nil {
-		log.Printf("[Context] Error updating cache: %v", err)
-	} else {
-		log.Printf("[Context] Cache updated for conversation %s", conversation.ID)
-	}
 }

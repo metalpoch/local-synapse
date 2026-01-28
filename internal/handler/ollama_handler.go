@@ -7,44 +7,18 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/metalpoch/local-synapse/internal/dto"
-	"github.com/metalpoch/local-synapse/internal/middleware"
 	"github.com/metalpoch/local-synapse/internal/usecase/ollama"
-	"github.com/metalpoch/local-synapse/internal/usecase/user"
 )
 
 type ollamaHandler struct {
-	chatUC       *ollama.StreamChatUsecase
-	getHistoryUC *ollama.GetChatHistory
-	listConvUC   *ollama.ListConversations
-	createConvUC *ollama.CreateConversation
-	deleteConvUC *ollama.DeleteConversation
-	renameConvUC *ollama.RenameConversation
-	getUser      *user.GetUser
+	chatUC *ollama.StreamChatUsecase
 }
 
-func NewOllamaHandler(
-	chatUC *ollama.StreamChatUsecase,
-	historyUC *ollama.GetChatHistory,
-	listUC *ollama.ListConversations,
-	createUC *ollama.CreateConversation,
-	deleteUC *ollama.DeleteConversation,
-	renameUC *ollama.RenameConversation,
-	gu *user.GetUser,
-) *ollamaHandler {
-	return &ollamaHandler{
-		chatUC,
-		historyUC,
-		listUC,
-		createUC,
-		deleteUC,
-		renameUC,
-		gu,
-	}
+func NewOllamaHandler(chatUC *ollama.StreamChatUsecase) *ollamaHandler {
+	return &ollamaHandler{chatUC}
 }
 
 func (h *ollamaHandler) Stream(c echo.Context) error {
-	userID, _ := middleware.GetUserID(c)
-
 	userPrompt := c.QueryParam("prompt")
 	if userPrompt == "" {
 		return c.String(http.StatusBadRequest, "Query parameter 'prompt' is required")
@@ -99,109 +73,5 @@ func (h *ollamaHandler) Stream(c echo.Context) error {
 		return nil
 	}
 
-	user, err := h.getUser.Execute(userID)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
-	}
-
-	convID := c.QueryParam("conversation_id")
-
-	return h.chatUC.Execute(ctx, user, convID, userPrompt, onChunk)
-}
-
-func (h *ollamaHandler) History(c echo.Context) error {
-	userID, ok := middleware.GetUserID(c)
-	if !ok {
-		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
-	}
-
-	convID := c.QueryParam("conversation_id")
-	ctx := c.Request().Context()
-	history, err := h.getHistoryUC.Execute(ctx, userID, convID)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
-	}
-
-	return c.JSON(http.StatusOK, history)
-}
-
-func (h *ollamaHandler) ListConversations(c echo.Context) error {
-	userID, ok := middleware.GetUserID(c)
-	if !ok {
-		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
-	}
-
-	ctx := c.Request().Context()
-	conversations, err := h.listConvUC.Execute(ctx, userID)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
-	}
-
-	return c.JSON(http.StatusOK, conversations)
-}
-
-func (h *ollamaHandler) CreateConversation(c echo.Context) error {
-	userID, ok := middleware.GetUserID(c)
-	if !ok {
-		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
-	}
-
-	ctx := c.Request().Context()
-	conv, err := h.createConvUC.Execute(ctx, userID)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
-	}
-
-	return c.JSON(http.StatusOK, conv)
-}
-
-func (h *ollamaHandler) DeleteConversation(c echo.Context) error {
-	userID, ok := middleware.GetUserID(c)
-	if !ok {
-		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
-	}
-
-	id := c.Param("id")
-	if id == "" {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "missing conversation id"})
-	}
-
-	ctx := c.Request().Context()
-	err := h.deleteConvUC.Execute(ctx, id, userID)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
-	}
-
-	return c.JSON(http.StatusOK, echo.Map{"message": "conversation deleted successfully"})
-}
-
-func (h *ollamaHandler) RenameConversation(c echo.Context) error {
-	userID, ok := middleware.GetUserID(c)
-	if !ok {
-		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "unauthorized"})
-	}
-
-	id := c.Param("id")
-	if id == "" {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "missing conversation id"})
-	}
-
-	var input struct {
-		Title string `json:"title"`
-	}
-	if err := c.Bind(&input); err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid request body"})
-	}
-
-	if input.Title == "" {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "title is required"})
-	}
-
-	ctx := c.Request().Context()
-	err := h.renameConvUC.Execute(ctx, id, userID, input.Title)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
-	}
-
-	return c.JSON(http.StatusOK, echo.Map{"message": "conversation renamed successfully"})
+	return h.chatUC.Execute(ctx, userPrompt, onChunk)
 }

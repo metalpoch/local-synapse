@@ -16,7 +16,6 @@ func main() {
 	)
 
 	s.AddTool(mcptools.SystemStats())
-	s.AddTool(mcptools.OSMBoundaryZone())
 
 	if err := server.ServeStdio(s); err != nil {
 		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)

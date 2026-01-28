@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"net/http"
 	"os"
@@ -11,41 +10,26 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/valkey-io/valkey-go"
 
-	"github.com/metalpoch/local-synapse/internal/infrastructure/cache"
-	"github.com/metalpoch/local-synapse/internal/infrastructure/database"
 	mcpclient "github.com/metalpoch/local-synapse/internal/infrastructure/mcp_client"
-	"github.com/metalpoch/local-synapse/internal/pkg/authentication"
 	"github.com/metalpoch/local-synapse/internal/pkg/config"
-	"github.com/metalpoch/local-synapse/internal/repository"
 	"github.com/metalpoch/local-synapse/internal/router"
 )
 
 var (
-	jwtSecret          string
 	port               string
 	ollamaModel        string
 	ollamaUrl          string
 	ollamaSystemPrompt string
-	valkeyAddress      string
-	valkeyPassword     string
-	SqliteAddr         string
-	db                 *sql.DB
-	vlk                valkey.Client
 	mcpClient          mcpclient.MCPClient
-	accessTokenTTL     time.Duration = 15 * time.Minute
-	refreshToken       time.Duration = 7 * 24 * time.Hour
 )
 
 func init() {
-	err := config.ApiEnviroment(&port, &jwtSecret, &ollamaUrl, &ollamaModel, &ollamaSystemPrompt, &valkeyAddress, &valkeyPassword, &SqliteAddr)
+	err := config.ApiEnviroment(&port, &ollamaUrl, &ollamaModel, &ollamaSystemPrompt)
 	if err != nil {
 		panic(err)
 	}
 
-	db = database.NewSqliteClient(SqliteAddr)
-	vlk = cache.NewValkeyClient(valkeyAddress, valkeyPassword)
 	mcpClient, err = mcpclient.NewStdioClient("./mcp")
 
 	if err != nil {
@@ -64,29 +48,14 @@ func main() {
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
 
-	e.Static("/assets", "public/assets")
-
-	// Global authentication manager
-	authManager := authentication.NewAuthManager([]byte(jwtSecret), vlk, accessTokenTTL, refreshToken)
-
-	// Initialize persistence and cache layers
-	userRepository := repository.NewUserRepo(db)
-	conversationRepository := repository.NewConversationRepository(db)
-	conversationCache := cache.NewConversationCache(vlk)
-
 	// Register all application routes
-	router.SetupSystemRouter(e, authManager)
-	router.SetupAuthRouter(e, authManager, userRepository)
+	router.SetupSystemRouter(e)
 	router.SetupOllamaRouter(
 		e,
 		ollamaUrl,
 		ollamaModel,
 		ollamaSystemPrompt,
 		mcpClient,
-		authManager,
-		userRepository,
-		conversationRepository,
-		conversationCache,
 	)
 
 	// Start the server in a background goroutine

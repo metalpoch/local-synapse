@@ -7,12 +7,7 @@ import (
 	"strconv"
 )
 
-func ApiEnviroment(port, jwtSecret, ollamaUrl, ollamaModel, ollamaSystemPrompt, valkeyAddress, valkeyPassword, sqliteAddr *string) error {
-	js := os.Getenv("JWT_SECRET")
-	if js == "" {
-		return errors.New("error 'JWT_SECRET' environment variable required.")
-	}
-
+func ApiEnviroment(port, ollamaUrl, ollamaModel, ollamaSystemPrompt *string) error {
 	ou := os.Getenv("OLLAMA_URL")
 	if ou == "" {
 		return errors.New("error 'OLLAMA_URL' environment variable required.")
@@ -28,21 +23,6 @@ func ApiEnviroment(port, jwtSecret, ollamaUrl, ollamaModel, ollamaSystemPrompt, 
 		return errors.New("error 'OLLAMA_SYSTEM_PROMPT' environment variable required.")
 	}
 
-	va := os.Getenv("VALKEY_ADDRESS")
-	if va == "" {
-		va = "127.0.0.1:6379"
-	}
-
-	vp := os.Getenv("VALKEY_PASSWORD")
-	if va == "" {
-		va = "keiber_es_sexy" // Default for local dev
-	}
-
-	sa := os.Getenv("SQLITE_ADDRESS")
-	if sa == "" {
-		return errors.New("error 'SQLITE_ADDRESS' environment variable required.")
-	}
-
 	p := os.Getenv("PORT")
 	if p == "" {
 		return errors.New("error 'PORT' environment variable required.")
@@ -53,13 +33,9 @@ func ApiEnviroment(port, jwtSecret, ollamaUrl, ollamaModel, ollamaSystemPrompt, 
 	}
 
 	*port = ":" + p
-	*jwtSecret = js
 	*ollamaUrl = ou
 	*ollamaModel = om
 	*ollamaSystemPrompt = osp
-	*valkeyAddress = va
-	*valkeyPassword = vp
-	*sqliteAddr = sa
 
 	return nil
 }

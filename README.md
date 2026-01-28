@@ -1,73 +1,114 @@
-# Local Synapse 🧠
+# 🧠 Personal MCP Tools Repository
 
-**Local Synapse** es un proxy ligero y servidor de herramientas escrito en Go. Su propósito es conectar un servidor local de [Ollama](https://ollama.com/) con el mundo exterior y exponer métricas del sistema a través del [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
+**Personal MCP Tools Repository** es mi colección personal de herramientas para el [Model Context Protocol (MCP)](https://modelcontextprotocol.io/). Este repositorio contiene herramientas MCP que he desarrollado para uso personal y que pueden ser integradas en cualquier proyecto que utilice MCP.
 
-Este proyecto está diseñado para desarrolladores que desean exponer sus modelos locales y el estado de su servidor de manera segura y estandarizada.
+## 🚀 Características
 
----
+### Herramientas MCP Disponibles
 
-## 🚀 Características Principales
+#### 1. **system-stats** 📊
+- **Descripción**: Obtiene métricas del sistema en tiempo real
+- **Métricas incluidas**:
+  - Uso de CPU (porcentaje)
+  - Uso de RAM (porcentaje y GB usados/totales)
+  - Uso de Disco (porcentaje y GB usados/totales)
+  - Tráfico de Red (bytes enviados/recibidos)
+- **Uso**: `system-stats`
 
-### 1. Proxy para Ollama
-- **Streaming de alta fidelidad**: Soporte completo para respuestas en tiempo real.
-- **Formatos flexibles**: Soporte nativo de Ollama o texto plano (`format=plain`).
-- **Persistencia de Contexto**: Mantiene el historial de conversación por usuario utilizando **Valkey** (cache) y **SQLite** (persistencia persistente).
-- **Identificación de Usuario**: El modelo reconoce al usuario actual (nombre y email) mediante inyección automática en el prompt de sistema.
+### Arquitectura Modular
+- **Estructura clara**: Cada herramienta en su propio archivo dentro de `internal/pkg/mcp_tools/`
+- **Fácil extensión**: Añade nuevas herramientas siguiendo el patrón existente
+- **Servidor MCP independiente**: Ejecutable standalone en `cmd/mcp/main.go`
 
-### 2. Monitor de Sistema
-- Endpoint REST para métricas en tiempo real: `GET /api/v1/system/stats`.
-- Monitoreo de: CPU, RAM, Disco y Red.
+## 🛠️ Uso
 
-### 3. Servidor MCP (Model Context Protocol) 
-- Expone herramientas locales a LLMs (Modelos de Lenguaje).
-- **Herramienta actual**: `system-stats` (Consultar estado del servidor desde el LLM).
-- **Transporte**: Stdio (Entrada/Salida estándar).
+### 1. Como Servidor MCP Standalone
 
----
+El servidor MCP funciona via Stdio y puede ser utilizado por cualquier cliente MCP:
 
-## 🛠 Flujo de Trabajo (Desarrollo)
-
-Sigue estos pasos para configurar tu entorno de desarrollo local.
-
-### Prerrequisitos
-- **Go 1.25+** instalado.
-- **Ollama** corriendo localmente (por defecto en port 11434).
-- **Valkey** o Redis accesible para el cache de contexto.
-- **SQLite** para la persistencia de mensajes.
-- **Make** (opcional, para usar el Makefile).
-
-### 1. Configuración del Entorno
-Crea un archivo `.env` en la raíz del proyecto:
-```env
-PORT=8080
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=llama3
-OLLAMA_SYSTEM_PROMPT="Eres un asistente útil."
-VALKEY_ADDRESS=localhost:6379
-SQLITE_ADDR=test.db
-JWT_SECRET=tu_secreto_super_seguro
-```
-
-### 2. Ejecutar la API (Proxy + Métricas)
-La API maneja el proxy hacia Ollama y el endpoint de métricas.
 ```bash
-# Usando Make
-make run-api
+# Ejecutar el servidor MCP
+go run ./cmd/mcp/main.go
 
-# O comando directo
-go run ./cmd/api/main.go
-```
-La API estará disponible en `http://localhost:8080`.
-
-### 3. Ejecutar el Servidor MCP
-El servidor MCP funciona via Stdio, por lo que se ejecuta generalmente a través de un host MCP o para pruebas manuales.
-
-**Prueba manual (JSON-RPC):**
-```bash
+# Probar manualmente (JSON-RPC)
 echo '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}' | go run ./cmd/mcp/main.go
 ```
 
----
+### 2. Integración con Clientes MCP
+
+#### Con Claude Desktop:
+```json
+{
+  "mcpServers": {
+    "personal-tools": {
+      "command": "go",
+      "args": ["run", "/ruta/a/tu/proyecto/cmd/mcp/main.go"]
+    }
+  }
+}
+```
+
+#### Con Cline u otros clientes:
+Configura el servidor para ejecutar el binario compilado o el comando `go run`.
+
+### 3. Como Biblioteca en Otros Proyectos
+
+Puedes importar las herramientas individualmente en tus proyectos Go:
+
+```go
+import (
+    "github.com/metalpoch/local-synapse/internal/pkg/mcp_tools"
+)
+
+// Usar la herramienta system-stats
+tool, handler := mcptools.SystemStats()
+```
+
+## 🏗️ Desarrollo de Nuevas Herramientas
+
+### Estructura de una Herramienta MCP
+
+Cada herramienta sigue este patrón en `internal/pkg/mcp_tools/`:
+
+```go
+package mcptools
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/mark3labs/mcp-go/mcp"
+    "github.com/mark3labs/mcp-go/server"
+)
+
+func MiNuevaHerramienta() (tool mcp.Tool, handler server.ToolHandlerFunc) {
+    return mcp.NewTool(
+            "mi-herramienta",
+            mcp.WithDescription("Descripción de mi herramienta"),
+            mcp.WithStringSchema("parametro", mcp.WithDescription("Descripción del parámetro")),
+        ),
+        func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+            // Lógica de la herramienta aquí
+            return mcp.NewToolResultText("Resultado"), nil
+        }
+}
+```
+
+### Pasos para Añadir una Nueva Herramienta:
+
+1. **Crear el archivo** en `internal/pkg/mcp_tools/`
+2. **Implementar la función** que retorna `(mcp.Tool, server.ToolHandlerFunc)`
+3. **Registrar la herramienta** en `cmd/mcp/main.go`:
+   ```go
+   s.AddTool(mcptools.MiNuevaHerramienta())
+   ```
+
+### Ejemplos de Herramientas Potenciales:
+- **file-operations**: Operaciones básicas de archivos
+- **git-utils**: Comandos Git comunes
+- **docker-status**: Estado de contenedores Docker
+- **weather-check**: Clima local
+- **todo-manager**: Gestor de tareas personal
 
 ## 📦 Despliegue (Producción)
 
@@ -84,58 +125,72 @@ Para desplegar en producción, simplemente utiliza el archivo `compose.yml` incl
 podman-compose up -d
 ```
 
-Esto levantará el contenedor `go-local-synapse-proxy` exponiendo el puerto 8080 y configurando todas las variables de entorno necesarias desde tu archivo `.env`.
+## 📦 Despliegue (Local)
 
-> [!IMPORTANT]
-> Se creará automáticamente un directorio `./data` en tu host para persistir la base de datos SQLite. 
-> El volumen en `compose.yml` incluye el sufijo `:z` para asegurar la compatibilidad con **SELinux** (común en Fedora Server), lo cual permite que Podman aplique las etiquetas de seguridad correctas automáticamente.
+### Compilar Binarios y ejecutar
 
-## 🧠 Uso de la API (Nativo)
-
-¡Tu API ahora es inteligente! No necesitas software extra. El contenedor ya incluye todo lo necesario para orquestar herramientas.
-
-### Usuarios y Sesión
-- **Validar Sesión**: `GET /api/v1/auth/me` (Requiere JWT).
-- **Cierre de Sesión**: `POST /api/v1/auth/logout` (Requiere JWT). Invalida el acceso actual.
-- **Refrescar Token**: `POST /api/v1/auth/refresh`. Permite obtener un nuevo par de tokens usando un Refresh Token.
-- **Login**: `POST /api/v1/auth/login`.
-- **Registro**: `POST /api/v1/auth/register`.
-
-### Consumo desde Web/Mobile
-Simplemente consulta el endpoint de chat. La API se encargará de:
-1.  Dialogar con Ollama.
-2.  Ejecutar herramientas locales (como obtener métricas) si Ollama lo pide.
-3.  Devolverte la respuesta final enriquecida.
-
-**Ejemplo de Request:**
 ```bash
-curl -X POST "http://localhost:8080/api/v1/ollama/chat?prompt=Dame%20el%20estado%20del%20servidor"
+make run-api
 ```
 
-**Respuesta (Automática):**
-> "El servidor está estable. El uso de CPU es del 15% y quedan 8GB de RAM libres..."
+## 🔧 Configuración
+
+### Variables de Entorno
+
+Crea un archivo `.env` en la raíz:
+
+```env
+PORT=8080
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=qwen3:4b
+OLLAMA_SYSTEM_PROMPT="Eres un asistente muy cute y algo tsundere que termina cada parrafo con 'datebayo'"
+```
+
+## 🧪 Testing
+
+```bash
+# Ejecutar tests unitarios
+go test ./...
+
+# Ejecutar tests con cobertura
+go test -cover ./...
+
+# Ejecutar tests específicos
+go test ./internal/pkg/mcp_tools/...
+```
+
+## 📁 Estructura del Proyecto
+
+```
+.
+├── cmd/
+│   ├── mcp/          # Servidor MCP principal
+│   └── api/          # API HTTP (opcional, para integración web)
+├── internal/
+│   ├── pkg/mcp_tools/ # Todas las herramientas MCP
+│   │   ├── system_stats.go
+│   │   └── [nueva_herramienta].go
+│   ├── infrastructure/ # Infraestructura compartida
+│   └── usecase/       # Casos de uso (si aplica)
+├── mcp                # Script MCP para ejecución directa
+├── Makefile          # Automatización
+├── compose.yml       # Docker Compose
+├── Containerfile     # Dockerfile
+└── README.md         # Este archivo
+```
+
+## 🤝 Contribución
+
+Este es un repositorio personal, pero si encuentras errores o tienes sugerencias:
+
+1. **Reporta issues** para bugs o mejoras
+2. **Sugiere nuevas herramientas** que podrían ser útiles
+3. **Sigue los patrones existentes** para consistencia
+
+## 📄 Licencia
+
+Este proyecto es de uso personal. Consulta el archivo LICENSE para más detalles.
 
 ---
 
-## 🔧 Uso CLI (Opcional con `mcphost`)
-Si prefieres interactuar desde la terminal usando `mcphost` en lugar de tu API web, puedes seguir haciéndolo.
-
-1.  **Instalar mcphost** (en el host):
-    ```bash
-    go install github.com/mark3labs/mcphost@latest
-    ```
-
-2.  **Conectar**:
-    ```bash
-    mcphost config set provider ollama
-    mcphost config set ollama-url http://localhost:11434
-    mcphost server add local-synapse -- podman exec -i go-local-synapse-proxy /root/mcp
-    ```
-
-3.  **Chatear**:
-    ```bash
-    mcphost chat "Estado del sistema"
-    ```
-
----
-*Desarrollado con ❤️ por poch.*
+*Desarrollado con ❤️ por poch. Mantenido como mi repositorio personal de herramientas MCP.*
